@@ -121,8 +121,6 @@ const SignalHistory = memo(({ apiUrl }: Props) => {
 
           {records.map((rec) => {
             const isExpanded = expandedId === rec.id;
-            const isNew = rec.pulses.length === 1;
-
             return (
               <div
                 key={rec.id}
