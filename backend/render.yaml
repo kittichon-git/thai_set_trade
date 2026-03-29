@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: dw-dashboard-backend
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: TZ
+        value: Asia/Bangkok
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: CORS_ORIGINS
+        sync: false

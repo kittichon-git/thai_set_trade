@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Safe area insets for iOS notch/home indicator */
+html {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Prevent horizontal scroll globally */
+body {
+  overflow-x: hidden;
+}
+
+/* Custom animations */
+@keyframes flash-green {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(16, 185, 129, 0.2); }
+}
+
+@keyframes flash-red {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(239, 68, 68, 0.2); }
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin-arrow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(180deg); }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* Utility classes */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.live-dot {
+  animation: pulse-live 1.5s ease-in-out infinite;
+}
+
+.flash-up {
+  animation: flash-green 0.8s ease-out;
+}
+
+.flash-down {
+  animation: flash-red 0.8s ease-out;
+}
+
+.slide-down {
+  animation: slide-down 0.2s ease-out;
+}
+
+.fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Scrollable table container — no horizontal scroll on page */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure touch targets are at least 44px for accessibility */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Pull-to-refresh arrow indicator */
+.ptr-arrow {
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+}
