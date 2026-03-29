@@ -26,6 +26,7 @@ _TOTAL_SESSION_MINUTES = 335  # 180 + 155
 # Signal thresholds
 PACE_RATIO_THRESHOLD  = 3.0   # volume rate > 3x expected at this time
 TOTAL_RATIO_THRESHOLD = 2.0   # or total today >= 2x avg_5d (end-of-day / accumulation)
+GAP_PACE_THRESHOLD    = 2.0   # min pace_ratio for gap-up condition
 
 
 def _elapsed_session_minutes(now: datetime) -> float:
@@ -106,14 +107,17 @@ def compute_all_signals() -> list[StockSignal]:
         total_ratio = today_vol / avg_vol
         pace_ratio  = _compute_pace_ratio(today_vol, avg_vol, elapsed)
 
-        # Signal fires if either volume condition met
-        if pace_ratio < PACE_RATIO_THRESHOLD and total_ratio < TOTAL_RATIO_THRESHOLD:
-            continue
-
-        # Gap-up condition: today's open must be above yesterday's high
         today_open = data.get("today_open", 0.0)
         prev_high  = data.get("prev_high", 0.0)
-        if prev_high > 0 and today_open <= prev_high:
+
+        # Condition 1: volume anomaly (pace or total)
+        cond1 = pace_ratio >= PACE_RATIO_THRESHOLD or total_ratio >= TOTAL_RATIO_THRESHOLD
+
+        # Condition 2: gap-up (open > prev high) with volume abnormal from open
+        cond2 = (prev_high > 0 and today_open > prev_high
+                 and pace_ratio >= GAP_PACE_THRESHOLD)
+
+        if not (cond1 or cond2):
             continue
 
         # Use the higher ratio for ranking and strength label
