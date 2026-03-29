@@ -106,8 +106,14 @@ def compute_all_signals() -> list[StockSignal]:
         total_ratio = today_vol / avg_vol
         pace_ratio  = _compute_pace_ratio(today_vol, avg_vol, elapsed)
 
-        # Signal fires if either condition met
+        # Signal fires if either volume condition met
         if pace_ratio < PACE_RATIO_THRESHOLD and total_ratio < TOTAL_RATIO_THRESHOLD:
+            continue
+
+        # Gap-up condition: today's open must be above yesterday's high
+        today_open = data.get("today_open", 0.0)
+        prev_high  = data.get("prev_high", 0.0)
+        if prev_high > 0 and today_open <= prev_high:
             continue
 
         # Use the higher ratio for ranking and strength label

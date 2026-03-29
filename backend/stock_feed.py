@@ -139,6 +139,21 @@ def _fetch_sync(symbols: list[str]) -> dict[str, dict[str, Any]]:
                 except Exception as intra_err:
                     logger.warning("Error parsing intraday data for %s: %s", bk_sym, intra_err)
 
+            # --- Extract today's open and yesterday's high for gap detection ---
+            today_open = 0.0
+            prev_high  = 0.0
+            if daily_data is not None and not daily_data.empty:
+                try:
+                    if is_single or not isinstance(daily_data.columns, pd.MultiIndex):
+                        sym_d = daily_data
+                    else:
+                        sym_d = daily_data[bk_sym]
+                    if not sym_d.empty and len(sym_d) >= 2:
+                        today_open = float(sym_d["Open"].iloc[-1])
+                        prev_high  = float(sym_d["High"].iloc[-2])
+                except Exception:
+                    pass
+
             # Only store symbols with valid data
             if last_price > 0:
                 result[clean_sym] = {
@@ -147,6 +162,8 @@ def _fetch_sync(symbols: list[str]) -> dict[str, dict[str, Any]]:
                     "today_volume": today_volume,
                     "avg_5d_volume": avg_5d_volume,
                     "sparkline": sparkline,
+                    "today_open": round(today_open, 4),
+                    "prev_high":  round(prev_high, 4),
                 }
 
         except Exception as e:

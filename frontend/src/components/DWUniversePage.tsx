@@ -36,7 +36,7 @@ export default function DWUniversePage({ apiUrl, endpoint = '/dw-universe', titl
     if (!data) return [];
     const q = search.trim().toUpperCase();
     return Object.entries(data.data)
-      .filter(([sym]) => endpoint === '/dw-all' ? THAI_SYMBOL.test(sym) : true)
+      .filter(([sym]) => THAI_SYMBOL.test(sym))
       .map(([sym, dws]) => {
         let items = dws;
         if (typeFilter !== 'All') {
