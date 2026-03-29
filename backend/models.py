@@ -34,6 +34,7 @@ class DashboardPayload(BaseModel):
     timestamp: str
     market_status: str  # "OPEN", "CLOSED", "PRE-OPEN"
     dw_universe_count: int
+    dw_all_count: int = 0
     signal_count: int       # ALL signals (not just top10)
     signals: list[StockSignal] = Field(default_factory=list)  # Top 10 only for display
 

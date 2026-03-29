@@ -30,10 +30,13 @@ export default function DWUniversePage({ apiUrl, endpoint = '/dw-universe', titl
       .catch((e) => { setError(String(e)); setLoading(false); });
   }, [apiUrl, endpoint]);
 
+  const THAI_SYMBOL = /^[A-Z]+$/;
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = search.trim().toUpperCase();
     return Object.entries(data.data)
+      .filter(([sym]) => endpoint === '/dw-all' ? THAI_SYMBOL.test(sym) : true)
       .map(([sym, dws]) => {
         let items = dws;
         if (typeFilter !== 'All') {
@@ -50,8 +53,9 @@ export default function DWUniversePage({ apiUrl, endpoint = '/dw-universe', titl
         if (items.length === 0) return null;
         return { sym, items };
       })
-      .filter(Boolean) as { sym: string; items: DWItem[] }[];
-  }, [data, search, typeFilter]);
+      .filter(Boolean)
+      .sort((a, b) => a!.sym.localeCompare(b!.sym)) as { sym: string; items: DWItem[] }[];
+  }, [data, search, typeFilter, endpoint]);
 
   const totalDW = filtered.reduce((s, r) => s + r.items.length, 0);
 

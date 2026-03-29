@@ -137,7 +137,7 @@ def _group_and_sort(items: list[DWItem]) -> dict[str, list[DWItem]]:
 def _apply_filter(item: DWItem) -> bool:
     return (
         item.days_remaining > MIN_DAYS
-        and (PRICE_MIN <= item.dw_price <= PRICE_MAX or GEARING_MIN <= item.gearing <= GEARING_MAX)
+        and PRICE_MIN <= item.dw_price <= PRICE_MAX
     )
 
 

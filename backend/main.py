@@ -112,6 +112,7 @@ def build_payload() -> DashboardPayload:
         timestamp=datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S"),
         market_status=get_market_status(),
         dw_universe_count=sum(len(v) for v in DW_UNIVERSE.values()),
+        dw_all_count=sum(len(v) for v in DW_ALL_COLLECTED.values()),
         signal_count=len(all_sigs),
         signals=top10,
     )

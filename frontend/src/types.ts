@@ -30,6 +30,7 @@ export interface DashboardPayload {
   timestamp: string;
   market_status: 'OPEN' | 'CLOSED' | 'PRE-OPEN';
   dw_universe_count: number;
+  dw_all_count: number;
   signal_count: number;
   signals: StockSignal[];
 }

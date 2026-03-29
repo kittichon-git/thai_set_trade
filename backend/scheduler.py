@@ -147,3 +147,20 @@ scheduler.add_job(
     replace_existing=True,
     misfire_grace_time=10,
 )
+
+# Job 3: DW universe refresh every 10 minutes during market hours
+async def intraday_scrape_job() -> None:
+    if not is_market_open():
+        return
+    logger.info("intraday_scrape_job: refreshing DW universe")
+    await scrape_dw_universe_playwright()
+
+scheduler.add_job(
+    intraday_scrape_job,
+    trigger="interval",
+    minutes=10,
+    id="intraday_scrape",
+    name="Intraday DW Universe Refresh",
+    replace_existing=True,
+    misfire_grace_time=60,
+)

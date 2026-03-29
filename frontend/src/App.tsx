@@ -75,6 +75,11 @@ export default function App() {
               }`}
             >
               📋 dw ทั้งหมด
+              {payload && payload.dw_all_count > 0 && (
+                <span className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full num">
+                  {payload.dw_all_count}
+                </span>
+              )}
             </button>
           </div>
         </div>
