@@ -20,99 +20,102 @@ try:
 except ImportError:
     logger.warning("MetaTrader5 library not found. MT5Provider will be unavailable.")
 
+# Global cache for quotes
+_quote_cache: dict[str, dict[str, Any]] = {}
+_cache_time: datetime = datetime(1970, 1, 1, tzinfo=TZ)
+
 class DataProvider:
     """Base interface for market data providers."""
-    def get_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
-        """Return {symbol: {last_price, today_volume, today_open, prev_high, today_high, ask_price}}"""
+    def get_quotes(self, symbols: list[str], force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+        """Return {symbol: {last_price, today_volume, today_open, prev_high, today_high, ask_price, sparkline}}"""
+        global _quote_cache, _cache_time
+        now = datetime.now(TZ)
+        if not force_refresh and (now - _cache_time).total_seconds() < 5:
+            return _quote_cache
+            
+        data = self._fetch_quotes(symbols)
+        if data:
+            _quote_cache.update(data)
+            _cache_time = now
+        return _quote_cache
+
+    def _fetch_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
         raise NotImplementedError
 
-    def get_yesterday_morning_data(self, symbols: list[str]) -> dict[str, list[int]]:
-        """Return {symbol: [vol_m1, vol_m2, ..., vol_m15]} for yesterday's first 15 mins."""
+    def get_recent_m1_history(self, symbols: list[str], days: int = 2) -> dict[str, dict[datetime, int]]:
+        """Return {symbol: {datetime: volume}} for the last `days` days of 1-minute bars."""
         raise NotImplementedError
 
 class YahooProvider(DataProvider):
     """Fallback provider using yfinance. 15-min delayed."""
-    def get_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
+    def _fetch_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
         results = {}
-        # Fetching in chunks for efficiency
         try:
-            # yfinance download for 1d history to get open, high, and current
-            data = yf.download(
-                [" ".join([f"{s}.BK" for s in symbols])],
-                period="1d",
-                interval="1m",
-                group_by="ticker",
-                progress=False,
-                threads=True
-            )
+            # We use Tickers for efficient snapshot fetching
+            tickers_str = " ".join([f"{s}.BK" for s in symbols])
+            tickers = yf.Tickers(tickers_str)
             
-            for s in symbols:
-                ticker = f"{s}.BK"
-                if ticker not in data: continue
-                
-                df = data[ticker]
-                if df.empty: continue
-                
-                last_row = df.iloc[-1]
-                first_row = df.iloc[0]
-                
-                results[s] = {
-                    "last_price": float(last_row["Close"]),
-                    "today_volume": int(last_row["Volume"]), # yf 'Volume' in 1m is cumulative today? No, it's bar volume. 
-                    # Actually yf 1d interval Volume is cumulative. 1m is bar volume.
-                    # We need cumulative volume.
-                }
+            # We also need sparkline (5d closes)
+            history = yf.download(tickers_str, period="5d", interval="1d", group_by="ticker", progress=False, threads=True)
             
-            # Alternative: use Tickers object for snapshot (quicker for daily totals)
-            tickers = yf.Tickers(" ".join([f"{s}.BK" for s in symbols]))
             for s in symbols:
                 t = f"{s}.BK"
                 if t not in tickers.tickers: continue
                 info = tickers.tickers[t].info
                 
+                # Extract Sparkline
+                sparkline = []
+                if not history.empty:
+                    try:
+                        h = history[t] if len(symbols) > 1 else history
+                        sparkline = h["Close"].dropna().tail(5).tolist()
+                    except: pass
+
                 results[s] = {
                     "last_price": info.get("currentPrice") or info.get("regularMarketPrice", 0.0),
                     "today_volume": info.get("regularMarketVolume", 0),
                     "today_open": info.get("regularMarketOpen", 0.0),
-                    "prev_high": info.get("regularMarketDayHigh", 0.0), # This might be today's high
+                    "prev_high": 0.0, # Will be set from history below
                     "today_high": info.get("dayHigh", 0.0),
                     "ask_price": info.get("ask", 0.0) or info.get("regularMarketPrice", 0.0),
+                    "change_pct": info.get("regularMarketChangePercent", 0.0),
+                    "sparkline": sparkline
                 }
+                
+                # Get prev_high from history if available
+                if len(sparkline) >= 2:
+                    results[s]["prev_high"] = float(history[t]["High"].iloc[-2]) if len(symbols) > 1 else float(history["High"].iloc[-2])
+
         except Exception as e:
             logger.error(f"YahooProvider quotes error: {e}")
             
         return results
 
-    def get_yesterday_morning_data(self, symbols: list[str]) -> dict[str, list[int]]:
-        """Fetch 1m bars for yesterday's opening."""
+    def get_recent_m1_history(self, symbols: list[str], days: int = 2) -> dict[str, dict[datetime, int]]:
+        """Fetch 1m bars for recent days using Yahoo Finance."""
         results = {}
         try:
-            # We fetch 5 days to ensure we catch 'yesterday' even after weekends
+            # We fetch up to 5 days to ensure we cross weekends if needed
+            fetch_days = max(days, 5)
             data = yf.download(
                 [f"{s}.BK" for s in symbols],
-                period="5d",
+                period=f"{fetch_days}d",
                 interval="1m",
                 group_by="ticker",
                 progress=False
             )
-            
-            # Find the most recent date that is NOT today
-            all_dates = sorted(data.index.normalize().unique())
-            if len(all_dates) < 2: return {}
-            yesterday = all_dates[-2] # second to last date
-            
             for s in symbols:
                 ticker = f"{s}.BK"
                 if ticker not in data: continue
-                df = data[ticker]
-                # Filter for yesterday's morning (09:30 - 10:15)
-                # BKK market open is 10:00 (Pre-open 09:30)
-                # Note: yfinance timezone might be UTC? No, usually local if specified.
-                # Thai market is UTC+7. 
-                y_df = df[df.index.normalize() == yesterday]
-                # Filter 10:00 - 10:15 BKK
-                morning_df = y_df.between_time("10:00", "10:15")
-                results[s] = morning_df["Volume"].tolist()
+                df = data[ticker].dropna(subset=['Volume'])
+                history_dict = {}
+                for ts, row in df.iterrows():
+                    if ts.tzinfo is None:
+                        dt = TZ.localize(ts.to_pydatetime())
+                    else:
+                        dt = ts.to_pydatetime().astimezone(TZ)
+                    history_dict[dt] = int(row["Volume"])
+                results[s] = history_dict
         except Exception as e:
             logger.error(f"YahooProvider history error: {e}")
         return results
@@ -125,7 +128,7 @@ class MT5Provider(DataProvider):
     def _get_mt5_symbol(self, s: str) -> str:
         return f"{s}{self.suffix}"
 
-    def get_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
+    def _fetch_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
         if not mt5 or not mt5.initialize():
             return {}
         
@@ -136,36 +139,46 @@ class MT5Provider(DataProvider):
             info = mt5.symbol_info(m_sym)
             
             if tick and info:
-                # MT5 info.volume is usually volume_real or volume
-                # For SET, we need to check which field corresponds to Today's Volume
+                # Fetch 5-day daily closes for sparkline
+                rates = mt5.copy_rates_from_pos(m_sym, mt5.TIMEFRAME_D1, 0, 5)
+                sparkline = [float(r.close) for r in rates] if rates is not None else []
+                prev_high = float(rates[-2].high) if rates is not None and len(rates) >= 2 else 0.0
+
                 results[s] = {
                     "last_price": tick.last,
                     "today_volume": info.volume_real if hasattr(info, 'volume_real') else info.volume,
                     "today_open": info.session_open,
-                    "prev_high": info.session_price_limit_max, # This might be limit price. 
-                    # Better to fetch from M1 history if info doesn't have yesterday's high
+                    "prev_high": prev_high,
                     "today_high": info.session_price_high,
                     "ask_price": tick.ask,
+                    "change_pct": (tick.last - info.price_prev_close) / info.price_prev_close * 100.0 if info.price_prev_close > 0 else 0.0,
+                    "sparkline": sparkline
                 }
         return results
 
-    def get_yesterday_morning_data(self, symbols: list[str]) -> dict[str, list[int]]:
-        """Fetch M1 bars for yesterday's opening."""
+    def get_recent_m1_history(self, symbols: list[str], days: int = 2) -> dict[str, dict[datetime, int]]:
+        """Fetch M1 bars for recent days using MT5."""
         if not mt5 or not mt5.initialize():
             return {}
         
         results = {}
-        # Get last 2 session info to find 'yesterday'
-        now = datetime.now()
+        # 1 day is approx 1440 minutes max
+        bars_to_fetch = 1440 * days
         for s in symbols:
             m_sym = self._get_mt5_symbol(s)
-            # Fetch last 1000 M1 bars to find yesterday's start
-            rates = mt5.copy_rates_from_pos(m_sym, mt5.TIMEFRAME_M1, 0, 1000)
+            rates = mt5.copy_rates_from_pos(m_sym, mt5.TIMEFRAME_M1, 0, bars_to_fetch)
             if rates is not None and len(rates) > 0:
-                # Group by date
-                # ... complex grouping logic ...
-                # Simple version: find first block of 10:00 bars before today's 10:00
-                pass
+                history_dict = {}
+                for r in rates:
+                    try:
+                        # MT5 times are usually broker time, we convert from timestamp
+                        dt = datetime.fromtimestamp(r.time, TZ)
+                        # We use real_volume if available, else tick_volume
+                        vol = int(r.real_volume) if hasattr(r, 'real_volume') and r.real_volume > 0 else int(r.tick_volume)
+                        history_dict[dt] = vol
+                    except Exception:
+                        pass
+                results[s] = history_dict
         return results
 
 # Global Provider Discovery

@@ -16,8 +16,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from models import DashboardPayload, WSMessage, StockSignal
 from dw_scraper import scrape_dw_universe, scrape_dw_universe_playwright, DW_UNIVERSE, DW_ALL_COLLECTED
 from stock_feed import fetch_stock_quotes, STOCK_DATA
-from signal_engine import compute_signals, compute_all_signals
-from signal_logger import load_log, record_signals, get_history, get_history_dates
+from signal_engine import compute_signals, compute_all_signals, refresh_m1_history
+from signal_logger import (
+    load_log, 
+    record_signals, 
+    get_history, 
+    get_history_dates,
+    sync_daily_performance
+)
 from scheduler import (
     scheduler,
     is_market_open,
@@ -44,6 +50,9 @@ async def lifespan(app: FastAPI):
 
     # Load persisted signal history
     load_log()
+
+    # Initialize M1 history for intraday and opening signals
+    await refresh_m1_history()
 
     # Scrape DW universe immediately (Playwright for all issuers, fallback to GET)
     await scrape_dw_universe_playwright()
@@ -123,6 +132,9 @@ def build_payload() -> DashboardPayload:
         # Restore full DW list from universe
         dw_list = DW_UNIVERSE.get(rec.symbol, [])
         
+        # Get latest pulse for the type and value
+        last_pulse = rec.pulses[-1] if rec.pulses else None
+        
         merged_map[rec.symbol] = StockSignal(
             symbol=rec.symbol,
             last_price=rec.last_price,
@@ -131,6 +143,8 @@ def build_payload() -> DashboardPayload:
             avg_5d_volume=rec.avg_5d_volume,
             volume_ratio=rec.max_ratio,  # Use max ratio seen today for history
             strength=rec.strength,
+            signal_type=last_pulse.signal_type if last_pulse else "Volume Anomaly",
+            signal_value=last_pulse.signal_value if last_pulse else 0.0,
             dw_list=dw_list,
             updated_at=f"{rec.date} {rec.last_seen}",
             sparkline=[], # Records don't store sparklines currently

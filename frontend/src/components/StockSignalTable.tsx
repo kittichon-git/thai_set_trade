@@ -8,6 +8,8 @@ import Sparkline from '../utils/Sparkline';
 import DWMatchedTable from './DWMatchedTable';
 
 interface Props {
+  title: string;
+  icon?: string;
   signals: StockSignal[];
   breakpoint: 'mobile' | 'tablet' | 'desktop';
 }
@@ -153,7 +155,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
 
 SignalRow.displayName = 'SignalRow';
 
-const StockSignalTable = memo(({ signals, breakpoint }: Props) => {
+const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint }: Props) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const handleToggle = useCallback((idx: number) => {
@@ -173,9 +175,10 @@ const StockSignalTable = memo(({ signals, breakpoint }: Props) => {
   }
 
   return (
-    <div className="fade-in">
+    <div className="fade-in mb-8">
       <div className="mb-3 flex items-center gap-2">
-        <span className="text-slate-400 text-sm font-medium">🔥 Volume Anomaly — Top 10</span>
+        <span className="text-xl">{icon}</span>
+        <span className="text-slate-400 text-sm font-medium">{title}</span>
         <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">
           {signals.length}
         </span>

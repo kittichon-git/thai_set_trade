@@ -20,14 +20,20 @@ type Tab = 'dashboard' | 'dw-universe' | 'dw-all';
 export default function App() {
   const { payload, status, lastUpdate, forceReconnect } = useWebSocket(WS_URL);
   const breakpoint = useBreakpoint();
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [expandedIdx, setExpandedIdx] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
-  const handleToggle = useCallback((idx: number) => {
+  const handleToggle = useCallback((idx: string) => {
     setExpandedIdx((prev) => (prev === idx ? null : idx));
   }, []);
 
   const isMobile = breakpoint === 'mobile';
+
+  // Smart Sections Categorization
+  const actionableTypes = ['Intraday Spike', 'Opening Vol', 'Gap Up + Vol'];
+  const spikeSignals = payload?.signals.filter(s => actionableTypes.includes(s.signal_type)).slice(0, 3) || [];
+  const moneyFlowSignals = payload?.signals.filter(s => s.signal_type?.includes('Money Flow')).slice(0, 5) || [];
+  const mainBoardSignals = payload?.signals.slice(0, 10) || [];
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 text-slate-100">
@@ -101,15 +107,6 @@ export default function App() {
           ) : isMobile ? (
             /* Mobile: Pull-to-refresh cards */
             <PullToRefresh onRefresh={forceReconnect}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-slate-400 text-sm font-medium">🔥 Volume Anomaly — Top 10</span>
-                {payload.signals.length > 0 && (
-                  <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">
-                    {payload.signals.length}
-                  </span>
-                )}
-              </div>
-
               {payload.signals.length === 0 ? (
                 <div className="fade-in text-center py-16 text-slate-500">
                   <div className="text-4xl mb-3">🔍</div>
@@ -117,25 +114,97 @@ export default function App() {
                   <div className="text-sm mt-1 text-slate-600">กำลังรอข้อมูล...</div>
                 </div>
               ) : (
-                <div>
-                  {payload.signals.map((sig, idx) => (
-                    <StockSignalCard
-                      key={sig.symbol}
-                      signal={sig}
-                      rank={idx + 1}
-                      isExpanded={expandedIdx === idx}
-                      onToggle={() => handleToggle(idx)}
-                    />
-                  ))}
+                <div className="flex flex-col gap-6">
+                  {/* SPIKES SECTION */}
+                  {spikeSignals.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="text-xl">⚡</span>
+                        <span className="text-slate-400 text-sm font-medium">Top Spikes (Actionable)</span>
+                        <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">{spikeSignals.length}</span>
+                      </div>
+                      {spikeSignals.map((sig, idx) => (
+                        <StockSignalCard
+                          key={`spike-${sig.symbol}`}
+                          signal={sig}
+                          rank={idx + 1}
+                          isExpanded={expandedIdx === `spike-${idx}`}
+                          onToggle={() => handleToggle(`spike-${idx}`)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* MAIN BOARD SECTION */}
+                  {mainBoardSignals.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="text-xl">🔥</span>
+                        <span className="text-slate-400 text-sm font-medium">Main Board — Top 10</span>
+                        <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">{mainBoardSignals.length}</span>
+                      </div>
+                      {mainBoardSignals.map((sig, idx) => (
+                        <StockSignalCard
+                          key={`main-${sig.symbol}`}
+                          signal={sig}
+                          rank={idx + 1}
+                          isExpanded={expandedIdx === `main-${idx}`}
+                          onToggle={() => handleToggle(`main-${idx}`)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* MONEY FLOW SECTION */}
+                  {moneyFlowSignals.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="text-xl">💸</span>
+                        <span className="text-slate-400 text-sm font-medium">Money Flow Leaderboard</span>
+                        <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">{moneyFlowSignals.length}</span>
+                      </div>
+                      {moneyFlowSignals.map((sig, idx) => (
+                        <StockSignalCard
+                          key={`money-${sig.symbol}`}
+                          signal={sig}
+                          rank={idx + 1}
+                          isExpanded={expandedIdx === `money-${idx}`}
+                          onToggle={() => handleToggle(`money-${idx}`)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </PullToRefresh>
           ) : (
-            /* Desktop/Tablet: Data table */
-            <StockSignalTable
-              signals={payload.signals}
-              breakpoint={breakpoint}
-            />
+            /* Desktop/Tablet: Data tables */
+            <div className="flex flex-col gap-4">
+              {spikeSignals.length > 0 && (
+                <StockSignalTable
+                  title="Top Spikes (Actionable)"
+                  icon="⚡"
+                  signals={spikeSignals}
+                  breakpoint={breakpoint}
+                />
+              )}
+              {mainBoardSignals.length > 0 && (
+                <StockSignalTable
+                  title="Main Board — Top 10"
+                  icon="🔥"
+                  signals={mainBoardSignals}
+                  breakpoint={breakpoint}
+                />
+              )}
+              {moneyFlowSignals.length > 0 && (
+                <StockSignalTable
+                  title="Money Flow Leaderboard"
+                  icon="💸"
+                  signals={moneyFlowSignals}
+                  breakpoint={breakpoint}
+                />
+              )}
+            </div>
           )}
 
           {/* Signal history section */}
@@ -147,7 +216,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="text-center text-slate-600 text-xs py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        ข้อมูล: thaiwarrant.com + Yahoo Finance (.BK) | Phase 1 | อัปเดตทุก 10 วินาที
+        ข้อมูล: thaiwarrant.com + Yahoo Finance (.BK) | Phase 2 | อัปเดตทุก 10 วินาที
       </footer>
     </div>
   );
