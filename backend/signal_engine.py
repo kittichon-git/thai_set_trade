@@ -146,6 +146,10 @@ def compute_all_signals() -> list[StockSignal]:
                 sig_type = "Money Flow (High Share)"
                 is_mf_signal = True
 
+        # Only show signals if price is in the green (Momentum for Calls)
+        if sig_type and quote.get("change_pct", 0.0) <= 0:
+            sig_type = None
+
         if sig_type:
             strength = "High" if ratio >= 5.0 or share >= 0.05 else "Normal"
             results.append(
@@ -160,7 +164,8 @@ def compute_all_signals() -> list[StockSignal]:
                     signal_type=sig_type,
                     signal_value=sig_val,
                     dw_list=DW_UNIVERSE.get(symbol, []),
-                    updated_at=now_str
+                    updated_at=now_str,
+                    sparkline=quote.get("sparkline", [])
                 )
             )
         
