@@ -13,7 +13,7 @@ import pytz
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import DashboardPayload, WSMessage
+from models import DashboardPayload, WSMessage, StockSignal
 from dw_scraper import scrape_dw_universe, scrape_dw_universe_playwright, DW_UNIVERSE, DW_ALL_COLLECTED
 from stock_feed import fetch_stock_quotes, STOCK_DATA
 from signal_engine import compute_signals, compute_all_signals
@@ -103,18 +103,63 @@ app.add_middleware(
 # Helper: build current dashboard payload
 # ---------------------------------------------------------------------------
 def build_payload() -> DashboardPayload:
-    """Compute all signals, log them, and return DashboardPayload with top 10."""
-    all_sigs = compute_all_signals()
-    record_signals(all_sigs)  # Log ALL qualifying signals (not just top 10)
-    top10 = all_sigs[:10]     # Only top 10 are sent to dashboard
+    """
+    Compute current signals, record them, and then merge with today's history
+    to ensure signals persist even after the market closes or volatility drops.
+    """
+    # 1. Get currently active (qualifying) signals
+    active_sigs = compute_all_signals()
+    record_signals(active_sigs)  # Persist them to signal_log.json
+
+    # 2. Get today's historical records from the log
+    # This includes everything that fired today, even if not active right now.
+    history_records = get_history()
+
+    # 3. Merge: We want one StockSignal per symbol.
+    # We'll use the history as the base and update with active signals if present.
+    merged_map: dict[str, StockSignal] = {}
+
+    # Initial pass from history
+    for rec in history_records:
+        # Restore full DW list from universe
+        dw_list = DW_UNIVERSE.get(rec.symbol, [])
+        
+        merged_map[rec.symbol] = StockSignal(
+            symbol=rec.symbol,
+            last_price=rec.last_price,
+            change_pct=rec.change_pct,
+            today_volume=rec.today_volume,
+            avg_5d_volume=rec.avg_5d_volume,
+            volume_ratio=rec.max_ratio,  # Use max ratio seen today for history
+            strength=rec.strength,
+            dw_list=dw_list,
+            updated_at=f"{rec.date} {rec.last_seen}",
+            sparkline=[], # Records don't store sparklines currently
+        )
+
+    # Overwrite/Update with fresher active signals
+    for sig in active_sigs:
+        # Active signal is the "truth" for current price/vol
+        # We also want to keep the highest ratio seen today
+        if sig.symbol in merged_map:
+            hist = merged_map[sig.symbol]
+            sig.volume_ratio = max(sig.volume_ratio, hist.volume_ratio)
+        merged_map[sig.symbol] = sig
+
+    # Convert back to list and sort by volume_ratio descending
+    all_merged = list(merged_map.values())
+    all_merged.sort(key=lambda s: s.volume_ratio, reverse=True)
+
+    # Send Top 15 to the dashboard (increased to show more of day's activity)
+    top_list = all_merged[:15]
 
     return DashboardPayload(
         timestamp=datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S"),
         market_status=get_market_status(),
         dw_universe_count=sum(len(v) for v in DW_UNIVERSE.values()),
         dw_all_count=sum(len(v) for v in DW_ALL_COLLECTED.values()),
-        signal_count=len(all_sigs),
-        signals=top10,
+        signal_count=len(all_merged),
+        signals=top_list,
     )
 
 
