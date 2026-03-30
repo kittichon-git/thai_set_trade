@@ -59,14 +59,13 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(broadcast_loop(), name="broadcast_loop")
     asyncio.create_task(ping_loop(), name="ping_loop")
 
-    # Fetch initial stock data if market is open
-    if is_market_open():
-        symbols = list(DW_UNIVERSE.keys())
-        if symbols:
-            logger.info("Market is open — fetching initial stock quotes for %d symbols", len(symbols))
-            await fetch_stock_quotes(symbols)
+    # Fetch initial stock data at startup (always, to populate end-of-day/historical context)
+    symbols = list(DW_UNIVERSE.keys())
+    if symbols:
+        logger.info("Fetching initial stock quotes for %d symbols at startup", len(symbols))
+        await fetch_stock_quotes(symbols)
     else:
-        logger.info("Market is closed — skipping initial stock quote fetch")
+        logger.info("DW_UNIVERSE is empty — skipping initial stock quote fetch")
 
     logger.info("DW Dashboard startup complete")
     yield
