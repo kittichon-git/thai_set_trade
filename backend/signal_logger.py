@@ -1,263 +1,175 @@
-# signal_logger.py — Persistent signal history for DW Dashboard via Supabase
-# One record per stock per day; each record has a pulse timeline stored in DW_signal_pulses
+# signal_logger.py — Signal history and performance tracking via Supabase
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import datetime
+from typing import Any, Optional
 
 import pytz
 
 from models import SignalRecord, SignalPulse, StockSignal
 from database import supabase
+from data_provider import get_provider
 
 logger = logging.getLogger(__name__)
-
 TZ = pytz.timezone("Asia/Bangkok")
 
-# Signal configuration
-RETENTION_DAYS = 30
-PULSE_MIN_SECONDS = 300      # minimum 5 minutes between pulses for same stock
-MARKET_WIDE_THRESHOLD = 10   # >= 10 stocks signaling at once = market-wide event
-
-# In-memory store for CURRENT DAY ONLY (for performance/UI broadcast)
-# Keyed by "{symbol}_{YYYYMMDD}"
+# Current Day Cache
 _today_signals: dict[str, SignalRecord] = {}
-
-# Last pulse time per symbol (for pulse dedup)
 _last_pulse: dict[str, datetime] = {}
-
+PULSE_MIN_SECONDS = 300
 
 def load_log() -> None:
-    """
-    Initial load of today's signals from Supabase to populate the memory cache.
-    Called on startup.
-    """
+    """Startup load of today's signals from Supabase."""
     global _today_signals
+    if supabase is None: return
     
-    if supabase is None:
-        logger.warning("Supabase not initialized — skipping load_log")
-        return
-
     now = datetime.now(TZ)
     date_str = now.strftime("%Y-%m-%d")
     
     try:
-        # Fetch today's records from DW_signal_records
-        # Note: supabase-py handles JOINs/Relations via select syntax
-        res = supabase.table("DW_signal_records") \
-            .select("*, DW_signal_pulses(*)") \
-            .eq("date", date_str) \
-            .execute()
-        
-        loaded: dict[str, SignalRecord] = {}
+        res = supabase.table("DW_signal_records").select("*, DW_signal_pulses(*)").eq("date", date_str).execute()
+        loaded = {}
         for item in res.data:
-            # Flatten pulses from sub-query
-            pulses_data = item.pop("DW_signal_pulses", [])
-            pulses = [SignalPulse(**p) for p in pulses_data]
-            pulses.sort(key=lambda x: x.time)
-            
-            # Map database 'record_id' back to Pydantic 'id'
-            if "record_id" in item:
-                item["id"] = item.pop("record_id")
-            
+            pulses_raw = item.pop("DW_signal_pulses", [])
+            if "record_id" in item: item["id"] = item.pop("record_id")
+            pulses = [SignalPulse(**p) for p in pulses_raw]
             record = SignalRecord(**item, pulses=pulses)
             loaded[record.id] = record
-            
             if pulses:
-                # Update last pulse cache
-                last_time_str = record.last_seen
-                try:
-                    dt = TZ.localize(datetime.strptime(f"{record.date} {last_time_str}", "%Y-%m-%d %H:%M:%S"))
-                    _last_pulse[record.symbol] = dt
-                except Exception:
-                    pass
-                    
+                # Cache last pulse time
+                last_time = pulses[-1].time
+                dt = TZ.localize(datetime.strptime(f"{record.date} {last_time}", "%Y-%m-%d %H:%M:%S"))
+                _last_pulse[record.symbol] = dt
         _today_signals = loaded
-        logger.info("Loaded %d signals for today (%s) from Supabase", len(_today_signals), date_str)
-        
+        logger.info(f"Loaded {len(_today_signals)} signals for today from Supabase")
     except Exception as e:
-        logger.error(f"Failed to load today's log from Supabase: {e}")
-
+        logger.error(f"Failed to load signal log from Supabase: {e}")
 
 def record_signals(all_signals: list[StockSignal]) -> None:
-    """
-    Called after each compute_all_signals() invocation.
-    - Updates in-memory _today_signals
-    - Performs upsert to DW_signal_records and insert to DW_signal_pulses in Supabase
-    """
-    if not all_signals:
-        return
-
+    """Record new signals and pulses with entry price tracking."""
+    if not all_signals: return
+    
     now = datetime.now(TZ)
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
-
-    simultaneous = len(all_signals)
-    is_market_wide = simultaneous >= MARKET_WIDE_THRESHOLD
-
-    if is_market_wide:
-        logger.info("Market-wide event: %d stocks signaling simultaneously", simultaneous)
+    provider = get_provider()
+    
+    # We might need bid/ask for entry simulation
+    quotes = provider.get_quotes([s.symbol for s in all_signals])
 
     for sig in all_signals:
         record_id = f"{sig.symbol}_{date_str.replace('-', '')}"
+        quote = quotes.get(sig.symbol, {})
+        entry_price = quote.get("ask_price") or sig.last_price
         
-        # 1. Check if we should add a pulse
-        should_pulse = False
-        last = _last_pulse.get(sig.symbol)
-        if last is None or (now - last).total_seconds() >= PULSE_MIN_SECONDS:
-            should_pulse = True
-
         pulse_obj = SignalPulse(
             time=time_str,
-            ratio=round(sig.volume_ratio, 2),
+            ratio=sig.volume_ratio,
             strength=sig.strength,
+            signal_type=sig.signal_type,
+            signal_value=sig.signal_value,
+            match_price=entry_price
         )
 
-        # 2. Update Memory Cache (_today_signals)
         if record_id not in _today_signals:
-            _today_signals[record_id] = SignalRecord(
-                id=record_id,
-                date=date_str,
-                symbol=sig.symbol,
-                first_seen=time_str,
-                last_seen=time_str,
-                pulses=[pulse_obj],
-                max_ratio=round(sig.volume_ratio, 2),
-                strength=sig.strength,
-                last_price=sig.last_price,
-                change_pct=sig.change_pct,
-                avg_5d_volume=sig.avg_5d_volume,
-                today_volume=sig.today_volume,
-                dw_count=len(sig.dw_list),
-                dw_codes=[dw.dw_code for dw in sig.dw_list],
-                simultaneous_count=simultaneous - 1,
-                is_market_wide=is_market_wide,
+            # Create new Signal Record
+            rec = SignalRecord(
+                id=record_id, date=date_str, symbol=sig.symbol,
+                first_seen=time_str, last_seen=time_str,
+                pulses=[pulse_obj], max_ratio=sig.volume_ratio, 
+                strength=sig.strength, last_price=sig.last_price,
+                change_pct=sig.change_pct, avg_5d_volume=sig.avg_5d_volume,
+                today_volume=sig.today_volume, dw_count=len(sig.dw_list),
+                dw_codes=[dw.dw_code for dw in sig.dw_list]
             )
-            _last_pulse[sig.symbol] = now
-            _db_upsert_record(_today_signals[record_id])
-            _db_insert_pulse(record_id, pulse_obj)
-            logger.info("New signal saved to DB: %s", sig.symbol)
-            
-        elif should_pulse:
-            rec = _today_signals[record_id]
-            rec.pulses.append(pulse_obj)
-            rec.last_seen = time_str
-            if sig.volume_ratio > rec.max_ratio:
-                rec.max_ratio = round(sig.volume_ratio, 2)
-                rec.strength = sig.strength
-            
-            # Fresh stats
-            rec.last_price = sig.last_price
-            rec.change_pct = sig.change_pct
-            rec.today_volume = sig.today_volume
-            
+            _today_signals[record_id] = rec
             _last_pulse[sig.symbol] = now
             _db_upsert_record(rec)
             _db_insert_pulse(record_id, pulse_obj)
-            logger.info("Pulse added to DB: %s (ratio=%.2f)", sig.symbol, sig.volume_ratio)
-
+            logger.info("New signal saved: %s type=%s entry=%.2f", sig.symbol, sig.signal_type, entry_price)
+        else:
+            # Check for pulse cooldown
+            last_dt = _last_pulse.get(sig.symbol)
+            if last_dt is None or (now - last_dt).total_seconds() >= PULSE_MIN_SECONDS:
+                rec = _today_signals[record_id]
+                rec.pulses.append(pulse_obj)
+                rec.last_seen = time_str
+                if sig.volume_ratio > rec.max_ratio:
+                    rec.max_ratio = sig.volume_ratio
+                    rec.strength = sig.strength
+                _last_pulse[sig.symbol] = now
+                _db_upsert_record(rec)
+                _db_insert_pulse(record_id, pulse_obj)
+                logger.info("Pulse added: %s type=%s entry=%.2f", sig.symbol, sig.signal_type, entry_price)
 
 def _db_upsert_record(rec: SignalRecord) -> None:
-    """Helper: Upsert a signal record to Supabase."""
     if supabase is None: return
+    data = rec.model_dump()
+    data.pop("pulses", None)
+    data["record_id"] = data.pop("id")
     try:
-        # Convert to dict and remove 'pulses' (it's a separate table)
-        data = rec.model_dump()
-        data.pop("pulses", None)
-        
-        # Map pydantic 'id' to database 'record_id'
-        data["record_id"] = data.pop("id")
-        
         supabase.table("DW_signal_records").upsert(data).execute()
     except Exception as e:
-        logger.error(f"Supabase upsert error for {rec.symbol}: {e}")
-
+        logger.error(f"Supabase record upsert error: {e}")
 
 def _db_insert_pulse(record_id: str, pulse: SignalPulse) -> None:
-    """Helper: Insert a pulse to Supabase."""
     if supabase is None: return
+    data = pulse.model_dump()
+    data["record_id"] = record_id
     try:
-        data = pulse.model_dump()
-        data["record_id"] = record_id
         supabase.table("DW_signal_pulses").insert(data).execute()
     except Exception as e:
-        logger.error(f"Supabase pulse insert error for {record_id}: {e}")
+        logger.error(f"Supabase pulse insert error: {e}")
 
-
-def get_history(date: str | None = None) -> list[SignalRecord]:
-    """
-    Return all signal records for the given date (YYYY-MM-DD) from Supabase.
-    If date is None, returns today's records.
-    """
-    target = date or datetime.now(TZ).strftime("%Y-%m-%d")
+async def sync_daily_performance():
+    """Execute at EOD (16:40) to update day_high and close_price and calculate P/L."""
+    if supabase is None: return
     
-    # If target is today, we can return from memory for speed
-    if target == datetime.now(TZ).strftime("%Y-%m-%d") and _today_signals:
-        records = list(_today_signals.values())
-        records.sort(key=lambda r: r.first_seen)
-        return records
-
-    if supabase is None: return []
-
-    try:
-        res = supabase.table("DW_signal_records") \
-            .select("*, DW_signal_pulses(*)") \
-            .eq("date", target) \
-            .order("first_seen") \
-            .execute()
+    now = datetime.now(TZ)
+    date_str = now.strftime("%Y-%m-%d")
+    logger.info("Syncing daily performance for %s...", date_str)
+    
+    provider = get_provider()
+    
+    # 1. Fetch all pulses for today
+    res = supabase.table("DW_signal_pulses") \
+        .select("*, DW_signal_records(symbol)") \
+        .filter("created_at", "gte", date_str) \
+        .execute()
+    
+    if not res.data:
+        logger.info("No pulses to update for today.")
+        return
         
-        results: list[SignalRecord] = []
-        for item in res.data:
-            pulses_data = item.pop("DW_signal_pulses", [])
-            pulses = [SignalPulse(**p) for p in pulses_data]
-            pulses.sort(key=lambda x: x.time)
+    # Get unique symbols
+    symbols = list({item["DW_signal_records"]["symbol"] for item in res.data})
+    quotes = provider.get_quotes(symbols)
+    
+    # 2. Update each pulse with High/Close/Profit
+    for item in res.data:
+        symbol = item["DW_signal_records"]["symbol"]
+        q = quotes.get(symbol)
+        if not q: continue
+        
+        match_price = item["match_price"]
+        day_high = q.get("today_high") or q.get("last_price")
+        close_price = q.get("last_price")
+        
+        if match_price and match_price > 0:
+            profit_high = round((day_high - match_price) / match_price * 100, 2)
+            profit_close = round((close_price - match_price) / match_price * 100, 2)
+        else:
+            profit_high = profit_close = 0.0
             
-            if "record_id" in item:
-                item["id"] = item.pop("record_id")
-            
-            results.append(SignalRecord(**item, pulses=pulses))
-            
-        return results
-    except Exception as e:
-        logger.error(f"Failed to fetch history from Supabase: {e}")
-        return []
+        try:
+            supabase.table("DW_signal_pulses").update({
+                "day_high_price": day_high,
+                "close_price": close_price,
+                "profit_high_pct": profit_high,
+                "profit_close_pct": profit_close
+            }).eq("id", item["id"]).execute()
+        except Exception as e:
+            logger.error(f"Failed to update pulse profit for {symbol}: {e}")
 
-
-def get_history_dates() -> list[str]:
-    """Return unique dates with signal records from Supabase."""
-    if supabase is None: return []
-    try:
-        res = supabase.table("DW_signal_records").select("date").execute()
-        dates = sorted({item["date"] for item in res.data}, reverse=True)
-        return dates
-    except Exception as e:
-        logger.error(f"Failed to fetch history dates from Supabase: {e}")
-        return []
-
-
-def get_all_history() -> list[SignalRecord]:
-    """Return all records from Supabase sorted by date+first_seen descending."""
-    if supabase is None: return []
-    try:
-        res = supabase.table("DW_signal_records") \
-            .select("*, DW_signal_pulses(*)") \
-            .order("date", desc=True) \
-            .order("first_seen", desc=True) \
-            .execute()
-            
-        results: list[SignalRecord] = []
-        for item in res.data:
-            pulses_data = item.pop("DW_signal_pulses", [])
-            pulses = [SignalPulse(**p) for p in pulses_data]
-            pulses.sort(key=lambda x: x.time)
-            
-            if "record_id" in item:
-                item["id"] = item.pop("record_id")
-            
-            results.append(SignalRecord(**item, pulses=pulses))
-            
-        return results
-    except Exception as e:
-        logger.error(f"Failed to fetch all history from Supabase: {e}")
-        return []
+    logger.info("Daily performance sync complete.")

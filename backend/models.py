@@ -25,6 +25,8 @@ class StockSignal(BaseModel):
     avg_5d_volume: int
     volume_ratio: float
     strength: str  # "2x+", "3x+", "5x+"
+    signal_type: str = "Volume Anomaly"  # "Opening", "Gap Up", "Spike", "Money Flow"
+    signal_value: float = 0.0           # Price * Volume (Money Flow)
     dw_list: list[DWItem] = Field(default_factory=list)
     updated_at: str
     sparkline: list[float] = Field(default_factory=list)  # 5 daily closes oldest->newest
@@ -48,6 +50,13 @@ class SignalPulse(BaseModel):
     time: str       # "10:45:32" — time of this signal occurrence
     ratio: float    # signal ratio at this moment
     strength: str   # "2x+", "3x+", "5x+"
+    signal_type: str = "Volume Anomaly"
+    signal_value: float = 0.0
+    match_price: Optional[float] = None
+    day_high_price: Optional[float] = None
+    close_price: Optional[float] = None
+    profit_high_pct: Optional[float] = None
+    profit_close_pct: Optional[float] = None
 
 
 class SignalRecord(BaseModel):

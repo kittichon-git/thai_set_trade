@@ -121,6 +121,17 @@ async def stock_feed_job() -> None:
         logger.error("stock_feed_job error: %s", e, exc_info=True)
 
 
+from signal_logger import sync_daily_performance
+
+
+async def daily_performance_sync_job() -> None:
+    """Evaluate signals profit/loss after market close at 16:40."""
+    if not is_trading_day():
+        return
+    logger.info("daily_performance_sync_job: starting EOD P/L calculation")
+    await sync_daily_performance()
+
+
 # APScheduler instance (AsyncIOScheduler — integrates with FastAPI's event loop)
 scheduler = AsyncIOScheduler(timezone=TZ)
 
@@ -155,6 +166,7 @@ async def intraday_scrape_job() -> None:
     logger.info("intraday_scrape_job: refreshing DW universe")
     await scrape_dw_universe_playwright()
 
+
 scheduler.add_job(
     intraday_scrape_job,
     trigger="interval",
@@ -163,4 +175,16 @@ scheduler.add_job(
     name="Intraday DW Universe Refresh",
     replace_existing=True,
     misfire_grace_time=60,
+)
+
+# Job 4: Daily Performance Sync at 16:40 Mon-Fri
+scheduler.add_job(
+    daily_performance_sync_job,
+    trigger="cron",
+    day_of_week="mon-fri",
+    hour=16,
+    minute=40,
+    id="performance_sync",
+    name="Daily Performance P/L Sync",
+    replace_existing=True,
 )
