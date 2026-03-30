@@ -20,7 +20,9 @@ export interface StockSignal {
   today_volume: number;
   avg_5d_volume: number;
   volume_ratio: number;
-  strength: '2x+' | '3x+' | '5x+';
+  strength: string; 
+  signal_type: string;
+  signal_value: number;
   dw_list: DWItem[];
   updated_at: string;
   sparkline: number[];
@@ -43,7 +45,14 @@ export interface WSMessage {
 export interface SignalPulse {
   time: string;
   ratio: number;
-  strength: '2x+' | '3x+' | '5x+';
+  strength: string;
+  signal_type: string;
+  signal_value: number;
+  match_price?: number;
+  day_high_price?: number;
+  close_price?: number;
+  profit_high_pct?: number;
+  profit_close_pct?: number;
 }
 
 export interface SignalRecord {
@@ -54,7 +63,7 @@ export interface SignalRecord {
   last_seen: string;
   pulses: SignalPulse[];
   max_ratio: number;
-  strength: '2x+' | '3x+' | '5x+';
+  strength: string;
   last_price: number;
   change_pct: number;
   avg_5d_volume: number;

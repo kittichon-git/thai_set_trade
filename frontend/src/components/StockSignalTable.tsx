@@ -59,16 +59,21 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
           <div className="flex items-center gap-2">
             <span
               className={`w-1 h-8 rounded-full flex-shrink-0 ${
-                signal.strength === '5x+'
+                signal.volume_ratio >= 5.0
                   ? 'bg-red-500'
-                  : signal.strength === '3x+'
+                  : signal.volume_ratio >= 3.0
                   ? 'bg-orange-500'
                   : 'bg-yellow-500'
               }`}
             />
             <div>
-              <div className="font-bold text-slate-100 text-sm tracking-wide">
+              <div className="font-bold text-slate-100 text-sm tracking-wide flex items-center gap-2">
                 {signal.symbol}
+                {signal.signal_type && (
+                  <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-medium">
+                    {signal.signal_type}
+                  </span>
+                )}
               </div>
               <div className="text-xs text-slate-500 num">
                 {signal.dw_list.length} DW
@@ -89,7 +94,12 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
 
         {/* Volume today */}
         <td className="py-3 px-2 text-right num text-sm text-slate-300">
-          {formatVolume(signal.today_volume)}
+          <div className="font-medium">{formatVolume(signal.today_volume)}</div>
+          {signal.signal_value > 1000 && (
+             <div className="text-[10px] text-slate-500">
+               {formatVolume(signal.signal_value)} ฿
+             </div>
+          )}
         </td>
 
         {/* Avg 5d volume (desktop only) */}

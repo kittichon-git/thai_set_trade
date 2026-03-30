@@ -187,22 +187,24 @@ const SignalHistory = memo(({ apiUrl }: Props) => {
                 {isExpanded && (
                   <div className="border-t border-slate-800/50 px-3 py-2 bg-slate-950/30">
                     <div className="text-xs text-slate-500 mb-2 font-medium">Timeline สัญญาณ</div>
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {rec.pulses.map((pulse, i) => (
                         <div key={i} className="flex items-center gap-3">
                           {/* Timeline dot */}
                           <div className="flex flex-col items-center w-4">
                             <div className={`w-2 h-2 rounded-full ${
-                              pulse.strength === '5x+' ? 'bg-red-500' :
-                              pulse.strength === '3x+' ? 'bg-orange-500' : 'bg-yellow-500'
+                              pulse.ratio >= 5.0 ? 'bg-red-500' :
+                              pulse.ratio >= 3.0 ? 'bg-orange-500' : 'bg-yellow-500'
                             }`} />
                             {i < rec.pulses.length - 1 && (
                               <div className="w-px h-4 bg-slate-700 mt-0.5" />
                             )}
                           </div>
                           <span className="text-slate-500 num font-mono text-xs w-16">{pulse.time}</span>
+                          <span className="text-[10px] bg-slate-800 text-blue-300 px-1.5 py-0.5 rounded border border-slate-700/40 uppercase font-bold tracking-wider">
+                             {pulse.signal_type || 'Volume'}
+                          </span>
                           <VolumeRatioBadge ratio={pulse.ratio} strength={pulse.strength} />
-                          {i === 0 && <span className="text-xs text-slate-600">พบครั้งแรก</span>}
                         </div>
                       ))}
                     </div>
