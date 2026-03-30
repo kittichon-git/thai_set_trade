@@ -11,11 +11,85 @@ import StockSignalCard from './components/StockSignalCard';
 import SignalHistory from './components/SignalHistory';
 import PullToRefresh from './components/PullToRefresh';
 import DWUniversePage from './components/DWUniversePage';
+import type { StockSignal } from './types';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/dashboard';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 type Tab = 'dashboard' | 'dw-universe' | 'dw-all';
+
+const MOCK_SIGNALS: StockSignal[] = [
+  {
+    symbol: "DELTA",
+    last_price: 112.50,
+    change_pct: 4.5,
+    today_volume: 15400000,
+    avg_5d_volume: 3200000,
+    volume_ratio: 4.8,
+    strength: "High",
+    signal_type: "Intraday Spike",
+    signal_value: 4.8,
+    dw_list: [{ dw_code: "DELTA01C2405A", dw_type: "Call", issuer: "01", dw_price: 0.45, underlying: "DELTA", gearing: 5.2, moneyness: "OTM", expiry_date: "2024-05-15", days_remaining: 45, dw_volume: 1200000 }],
+    updated_at: new Date().toISOString(),
+    sparkline: [105, 107, 106, 110, 112.5]
+  },
+  {
+    symbol: "KBANK",
+    last_price: 125.00,
+    change_pct: 2.1,
+    today_volume: 8500000,
+    avg_5d_volume: 4000000,
+    volume_ratio: 2.1,
+    strength: "Normal",
+    signal_type: "Opening Vol",
+    signal_value: 2.1,
+    dw_list: [{ dw_code: "KBANK13C2406A", dw_type: "Call", issuer: "13", dw_price: 0.32, underlying: "KBANK", gearing: 6.1, moneyness: "ATM", expiry_date: "2024-06-10", days_remaining: 70, dw_volume: 500000 }],
+    updated_at: new Date().toISOString(),
+    sparkline: [120, 121, 122, 122.5, 125]
+  },
+  {
+    symbol: "AOT",
+    last_price: 65.25,
+    change_pct: 1.5,
+    today_volume: 22000000,
+    avg_5d_volume: 15000000,
+    volume_ratio: 1.4,
+    strength: "Normal",
+    signal_type: "Gap Up + Vol",
+    signal_value: 1.5,
+    dw_list: [],
+    updated_at: new Date().toISOString(),
+    sparkline: [63, 63.5, 64, 64.25, 65.25]
+  },
+  {
+    symbol: "PTTEP",
+    last_price: 162.50,
+    change_pct: 0.5,
+    today_volume: 5500000,
+    avg_5d_volume: 5000000,
+    volume_ratio: 1.1,
+    strength: "Normal",
+    signal_type: "Money Flow (Top 10)",
+    signal_value: 3.5,
+    dw_list: [{ dw_code: "PTTEP01C2407A", dw_type: "Call", issuer: "01", dw_price: 0.55, underlying: "PTTEP", gearing: 4.8, moneyness: "ITM", expiry_date: "2024-07-20", days_remaining: 110, dw_volume: 2500000 }],
+    updated_at: new Date().toISOString(),
+    sparkline: [160, 161, 159, 161.5, 162.5]
+  },
+  {
+    symbol: "CPALL",
+    last_price: 57.50,
+    change_pct: -0.5,
+    today_volume: 18000000,
+    avg_5d_volume: 20000000,
+    volume_ratio: 0.9,
+    strength: "Normal",
+    signal_type: "Money Flow (High Share)",
+    signal_value: 2.8,
+    dw_list: [],
+    updated_at: new Date().toISOString(),
+    sparkline: [58, 57.75, 58.25, 58, 57.5]
+  }
+];
 
 export default function App() {
   const { payload, status, lastUpdate, forceReconnect } = useWebSocket(WS_URL);
@@ -30,10 +104,13 @@ export default function App() {
   const isMobile = breakpoint === 'mobile';
 
   // Smart Sections Categorization
+  // Use MOCK_SIGNALS if it's outside market hours or no data yet for UI demonstration
+  const activeSignals = payload?.signals && payload.signals.length > 0 ? payload.signals : MOCK_SIGNALS;
+  
   const actionableTypes = ['Intraday Spike', 'Opening Vol', 'Gap Up + Vol'];
-  const spikeSignals = payload?.signals.filter(s => actionableTypes.includes(s.signal_type)).slice(0, 3) || [];
-  const moneyFlowSignals = payload?.signals.filter(s => s.signal_type?.includes('Money Flow')).slice(0, 5) || [];
-  const mainBoardSignals = payload?.signals.slice(0, 10) || [];
+  const spikeSignals = activeSignals.filter(s => actionableTypes.includes(s.signal_type)).slice(0, 3);
+  const moneyFlowSignals = activeSignals.filter(s => s.signal_type?.includes('Money Flow')).slice(0, 5);
+  const mainBoardSignals = activeSignals.slice(0, 10);
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 text-slate-100">
@@ -102,12 +179,12 @@ export default function App() {
       ) : (
         /* Dashboard tab */
         <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-          {!payload ? (
+          {!payload && activeSignals === MOCK_SIGNALS ? (
             <LoadingState />
           ) : isMobile ? (
             /* Mobile: Pull-to-refresh cards */
             <PullToRefresh onRefresh={forceReconnect}>
-              {payload.signals.length === 0 ? (
+              {activeSignals.length === 0 ? (
                 <div className="fade-in text-center py-16 text-slate-500">
                   <div className="text-4xl mb-3">🔍</div>
                   <div className="text-base font-medium">ยังไม่พบสัญญาณ</div>
@@ -216,7 +293,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="text-center text-slate-600 text-xs py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        ข้อมูล: thaiwarrant.com + Yahoo Finance (.BK) | Phase 2 | อัปเดตทุก 10 วินาที
+        ข้อมูล: thaiwarrant.com + Yahoo Finance (.BK) | Phase 2 | {payload?.signals.length === 0 ? 'กำลังแสดงข้อมูลจำลอง (Mocks)' : 'อัปเดตทุก 10 วินาที'}
       </footer>
     </div>
   );
