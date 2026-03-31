@@ -26,12 +26,14 @@ async def fetch_stock_quotes(symbols: list[str]) -> None:
     logger.debug("Fetching quotes for %d symbols via provider", len(symbols))
 
     try:
-        # get_quotes(symbols) internally handles MT5 vs Yahoo and caching
-        new_data = get_provider().get_quotes(symbols, force_refresh=True)
+        # yfinance is a sync library — run in thread pool to avoid blocking event loop
+        new_data = await asyncio.to_thread(
+            get_provider().get_quotes, symbols, True
+        )
         STOCK_DATA.update(new_data)
-        logger.debug("STOCK_DATA updated from provider (%d symbols)", len(new_data))
+        logger.info("STOCK_DATA updated: %d symbols", len(new_data))
     except Exception as e:
-        logger.error("fetch_stock_quotes (provider) error: %s", e)
+        logger.error("fetch_stock_quotes error: %s", e)
 
 # Entry point for standalone testing (now simpler)
 if __name__ == "__main__":

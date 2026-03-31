@@ -51,44 +51,71 @@ class YahooProvider(DataProvider):
     def _fetch_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
         results = {}
         try:
-            # We use Tickers for efficient snapshot fetching
             tickers_str = " ".join([f"{s}.BK" for s in symbols])
-            tickers = yf.Tickers(tickers_str)
-            
-            # We also need sparkline (5d closes)
-            history = yf.download(tickers_str, period="5d", interval="1d", group_by="ticker", progress=False, threads=True)
-            
-            for s in symbols:
-                t = f"{s}.BK"
-                if t not in tickers.tickers: continue
-                info = tickers.tickers[t].info
-                
-                # Extract Sparkline
-                sparkline = []
-                if not history.empty:
-                    try:
-                        h = history[t] if len(symbols) > 1 else history
-                        sparkline = h["Close"].dropna().tail(5).tolist()
-                    except: pass
+            # Single batch download — much faster than calling .info per ticker
+            hist = yf.download(
+                tickers_str, period="50d", interval="1d",
+                group_by="ticker", progress=False, auto_adjust=False
+            )
+            if hist.empty:
+                return results
 
-                results[s] = {
-                    "last_price": info.get("currentPrice") or info.get("regularMarketPrice", 0.0),
-                    "today_volume": info.get("regularMarketVolume", 0),
-                    "today_open": info.get("regularMarketOpen", 0.0),
-                    "prev_high": 0.0, # Will be set from history below
-                    "today_high": info.get("dayHigh", 0.0),
-                    "ask_price": info.get("ask", 0.0) or info.get("regularMarketPrice", 0.0),
-                    "change_pct": info.get("regularMarketChangePercent", 0.0),
-                    "sparkline": sparkline
-                }
-                
-                # Get prev_high from history if available
-                if len(sparkline) >= 2:
-                    results[s]["prev_high"] = float(history[t]["High"].iloc[-2]) if len(symbols) > 1 else float(history["High"].iloc[-2])
+            multi = len(symbols) > 1
+
+            for s in symbols:
+                try:
+                    h = hist[f"{s}.BK"] if multi else hist
+                    h = h.dropna(how="all")
+                    if h.empty or len(h) < 1:
+                        continue
+
+                    last = h.iloc[-1]
+                    prev = h.iloc[-2] if len(h) >= 2 else last
+
+                    vols = h["Volume"].dropna().tolist()
+                    avg_5d = int(sum(vols[-5:]) / len(vols[-5:])) if vols else 0
+                    sparkline = [float(v) for v in h["Close"].dropna().tail(5).tolist()]
+
+                    last_close = float(last["Close"])
+                    prev_close = float(prev["Close"])
+                    change_pct = ((last_close - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+
+                    # OHLC for candlestick chart (last 6 trading days)
+                    import math
+                    ohlc = []
+                    for idx, row in h.tail(30).iterrows():
+                        try:
+                            o, hi, lo, c = float(row["Open"]), float(row["High"]), float(row["Low"]), float(row["Close"])
+                            v = float(row["Volume"])
+                            if any(math.isnan(x) for x in [o, hi, lo, c]):
+                                continue
+                            ohlc.append({
+                                "time": idx.strftime("%Y-%m-%d"),
+                                "open": o, "high": hi, "low": lo, "close": c,
+                                "volume": 0 if math.isnan(v) else int(v),
+                            })
+                        except Exception:
+                            pass
+
+                    results[s] = {
+                        "last_price": last_close,
+                        "today_volume": int(last["Volume"]) if last["Volume"] == last["Volume"] else 0,
+                        "avg_5d_volume": avg_5d,
+                        "today_open": float(last["Open"]),
+                        "prev_high": float(prev["High"]),
+                        "today_high": float(last["High"]),
+                        "ask_price": last_close,
+                        "change_pct": change_pct,
+                        "sparkline": sparkline,
+                        "ohlc": ohlc,
+                    }
+                except Exception as e:
+                    logger.debug("[YahooProvider] %s error: %s", s, e)
 
         except Exception as e:
-            logger.error(f"YahooProvider quotes error: {e}")
-            
+            logger.error("[YahooProvider] fatal error: %s", e)
+
+        logger.info("[YahooProvider] fetched %d/%d symbols", len(results), len(symbols))
         return results
 
     def get_recent_m1_history(self, symbols: list[str], days: int = 2) -> dict[str, dict[datetime, int]]:
@@ -144,15 +171,32 @@ class MT5Provider(DataProvider):
                 sparkline = [float(r.close) for r in rates] if rates is not None else []
                 prev_high = float(rates[-2].high) if rates is not None and len(rates) >= 2 else 0.0
 
+                avg_5d_volume = int(sum(r.tick_volume for r in rates) / len(rates)) if rates is not None and len(rates) > 0 else 0
+                ohlc = []
+                if rates is not None:
+                    for r in rates:
+                        try:
+                            dt = datetime.fromtimestamp(r.time, TZ)
+                            vol = int(r.real_volume) if hasattr(r, 'real_volume') and r.real_volume > 0 else int(r.tick_volume)
+                            ohlc.append({
+                                "time": dt.strftime("%Y-%m-%d"),
+                                "open": float(r.open), "high": float(r.high),
+                                "low": float(r.low), "close": float(r.close),
+                                "volume": vol,
+                            })
+                        except Exception:
+                            pass
                 results[s] = {
                     "last_price": tick.last,
                     "today_volume": info.volume_real if hasattr(info, 'volume_real') else info.volume,
+                    "avg_5d_volume": avg_5d_volume,
                     "today_open": info.session_open,
                     "prev_high": prev_high,
                     "today_high": info.session_price_high,
                     "ask_price": tick.ask,
                     "change_pct": (tick.last - info.price_prev_close) / info.price_prev_close * 100.0 if info.price_prev_close > 0 else 0.0,
-                    "sparkline": sparkline
+                    "sparkline": sparkline,
+                    "ohlc": ohlc,
                 }
         return results
 
@@ -187,12 +231,13 @@ _provider: Optional[DataProvider] = None
 def get_provider() -> DataProvider:
     global _provider
     if _provider: return _provider
-    
-    # Try MT5 first
-    if mt5 and mt5.initialize():
+
+    # Use MT5 only when explicitly enabled via env var
+    use_mt5 = os.getenv("USE_MT5", "false").lower() == "true"
+    if use_mt5 and mt5 and mt5.initialize():
         logger.info("Using MT5Provider")
         _provider = MT5Provider()
     else:
-        logger.info("Using YahooProvider (Fallback)")
+        logger.info("Using YahooProvider")
         _provider = YahooProvider()
     return _provider

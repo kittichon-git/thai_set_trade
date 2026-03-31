@@ -122,6 +122,48 @@ def _db_insert_pulse(record_id: str, pulse: SignalPulse) -> None:
     except Exception as e:
         logger.error(f"Supabase pulse insert error: {e}")
 
+def get_history(date: str | None = None) -> list[SignalRecord]:
+    """Return signal records for a given date (default: today). Queries Supabase for past dates."""
+    import pytz as _pytz
+    tz = _pytz.timezone("Asia/Bangkok")
+    target = date or datetime.now(tz).strftime("%Y-%m-%d")
+    today = datetime.now(tz).strftime("%Y-%m-%d")
+
+    # Today's records are in memory
+    if target == today:
+        return list(_today_signals.values())
+
+    # Past dates: query Supabase
+    if supabase is None:
+        return []
+    try:
+        res = supabase.table("DW_signal_records").select("*, DW_signal_pulses(*)").eq("date", target).execute()
+        records = []
+        for item in res.data:
+            pulses_raw = item.pop("DW_signal_pulses", [])
+            if "record_id" in item:
+                item["id"] = item.pop("record_id")
+            pulses = [SignalPulse(**p) for p in pulses_raw]
+            records.append(SignalRecord(**item, pulses=pulses))
+        return records
+    except Exception as e:
+        logger.error(f"get_history error for {target}: {e}")
+        return []
+
+
+def get_history_dates() -> list[str]:
+    """Return list of dates that have signal records in Supabase."""
+    if supabase is None:
+        return []
+    try:
+        res = supabase.table("DW_signal_records").select("date").execute()
+        dates = sorted({item["date"] for item in res.data}, reverse=True)
+        return dates
+    except Exception as e:
+        logger.error(f"get_history_dates error: {e}")
+        return []
+
+
 async def sync_daily_performance():
     """Execute at EOD (16:40) to update day_high and close_price and calculate P/L."""
     if supabase is None: return

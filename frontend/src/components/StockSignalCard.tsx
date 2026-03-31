@@ -7,6 +7,7 @@ import VolumeRatioBadge from './VolumeRatioBadge';
 import PriceChange from './PriceChange';
 import Sparkline from '../utils/Sparkline';
 import DWMatchedCard from './DWMatchedCard';
+import CandlestickChart from './CandlestickChart';
 
 interface Props {
   signal: StockSignal;
@@ -15,14 +16,14 @@ interface Props {
   onToggle: () => void;
 }
 
-const borderColorMap: Record<StockSignal['strength'], string> = {
-  '5x+': 'border-red-500',
-  '3x+': 'border-orange-500',
-  '2x+': 'border-yellow-500',
-};
-
 const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle }: Props) => {
-  const borderColor = borderColorMap[signal.strength];
+  const borderColor =
+    signal.strength === 'High' || signal.volume_ratio >= 5.0
+      ? 'border-red-500'
+      : signal.volume_ratio >= 3.0
+      ? 'border-orange-500'
+      : 'border-yellow-500';
+  const ohlc = signal.ohlc ?? [];
 
   return (
     <div
@@ -85,7 +86,7 @@ const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle }: Props) => 
         </button>
       </div>
 
-      {/* Expandable DW list */}
+      {/* Expandable chart + DW list */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -96,6 +97,38 @@ const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle }: Props) => 
             style={{ overflow: 'hidden' }}
           >
             <div className="px-3 pb-3 border-t border-slate-700/40 pt-3">
+              {/* Price chart */}
+              {ohlc.length >= 1 ? (
+                <div className="mb-3 bg-slate-800/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 font-medium">{signal.symbol} — แท่งเทียนรายวัน</span>
+                    <span className="text-xs num">
+                      <span className="text-slate-500">฿{ohlc[0].close.toFixed(2)} → </span>
+                      <span className={ohlc[ohlc.length-1].close >= ohlc[0].close ? 'text-emerald-400' : 'text-red-400'}>
+                        ฿{ohlc[ohlc.length-1].close.toFixed(2)}
+                      </span>
+                    </span>
+                  </div>
+                  <CandlestickChart data={ohlc} height={160} />
+                </div>
+              ) : signal.sparkline.length >= 2 ? (
+                <div className="mb-3 bg-slate-800/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 font-medium">{signal.symbol} — 5 วันล่าสุด</span>
+                    <span className="text-xs num">
+                      <span className="text-slate-500">฿{signal.sparkline[0].toFixed(2)} → </span>
+                      <span className={signal.sparkline[signal.sparkline.length-1] >= signal.sparkline[0] ? 'text-emerald-400' : 'text-red-400'}>
+                        ฿{signal.sparkline[signal.sparkline.length-1].toFixed(2)}
+                      </span>
+                    </span>
+                  </div>
+                  <Sparkline data={signal.sparkline} width={280} height={64} showArea showDots />
+                </div>
+              ) : null}
+              {/* DW Call list */}
+              <div className="text-xs text-slate-500 mb-2 font-medium">
+                📋 DW Call — {signal.symbol} ({signal.dw_list.length} รายการ)
+              </div>
               <DWMatchedCard dwList={signal.dw_list} />
             </div>
           </motion.div>

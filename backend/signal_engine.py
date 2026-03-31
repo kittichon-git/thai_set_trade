@@ -18,19 +18,14 @@ TZ = pytz.timezone("Asia/Bangkok")
 OPENING_THRESHOLD    = 2.0   # Current vs Yesterday M15 > 2x
 GAP_UP_THRESHOLD     = 0.5   # Gap % threshold
 SPIKE_THRESHOLD      = 3.0   # 15m vol > 3x prev 60m avg
-MONEY_FLOW_TOP_N     = 50
-SIGNIFICANT_JUMP     = 10    # Jump 10+ spots in ranking
-SIGNIFICANT_SHARE    = 0.01  # > 1% share of total watchlist value
+MONEY_FLOW_TOP_N     = 5     # Top 5 by money flow share
 
 # State Storage
 YESTERDAY_OPENING_VOL: dict[str, int] = {}
 INTRADAY_CUM_VOL: dict[str, dict[datetime, int]] = {}
-PREV_MONEY_FLOW_RANK: dict[str, int] = {}
-HAS_FIRED_TOP_10: set[str] = set()
 
 # SET Market hours (Thai Time)
 MORNING_OPEN = time(10, 0)
-MONEY_FLOW_SNAPSHOT_TIME = time(10, 10)
 
 
 async def refresh_m1_history():
@@ -140,7 +135,8 @@ def compute_all_signals() -> list[StockSignal]:
         sig_type = None
         sig_val = 0.0  # Normalized value for cross-signal sorting
         ratio = 0.0
-        
+        avg5d = quote.get("avg_5d_volume", 0)
+
         # 1. Opening Vol Anomaly (First 15 mins)
         # Compare current cumulative vol (up to 15m) vs yesterday's FULL 15m (or proportional)
         if time(10, 0) <= now_time <= time(10, 15):
@@ -151,12 +147,15 @@ def compute_all_signals() -> list[StockSignal]:
                     sig_type = "Opening Vol"
                     sig_val = ratio
         
-        # 2. Gap Up + Vol
-        if quote["today_open"] > quote["prev_high"] and quote["prev_high"] > 0:
-            if ratio >= OPENING_THRESHOLD:
+        # 2. Gap Up + Vol (independent of Opening Vol window — runs all day)
+        if quote.get("today_open", 0) > quote.get("prev_high", 0) > 0:
+            avg5d = quote.get("avg_5d_volume", 0)
+            gap_ratio = (today_vol / avg5d) if avg5d > 0 else 0.0
+            if gap_ratio >= OPENING_THRESHOLD:
                 sig_type = "Gap Up + Vol"
                 gap_pct = ((quote["today_open"] - quote["prev_high"]) / quote["prev_high"]) * 100
-                sig_val = gap_pct + ratio # Give boost to Gap Up with high volume
+                ratio = gap_ratio
+                sig_val = gap_pct + gap_ratio
 
         # 3. Intraday Volume Spike
         if sig_type is None and now_time > time(10, 15):
@@ -173,33 +172,11 @@ def compute_all_signals() -> list[StockSignal]:
                     sig_val = spike_ratio
                     ratio = spike_ratio
         
-        # 4. Money Flow Jumps / Snapshots
-        is_mf_signal = False
-        if not sig_type:
-            # Snapshot at 10:10
-            if MONEY_FLOW_SNAPSHOT_TIME <= now_time <= time(10, 11) and rank <= MONEY_FLOW_TOP_N:
-                sig_type = "Money Flow (Snapshot)"
-                is_mf_signal = True
-            
-            # Significant Jump
-            prev_rank = PREV_MONEY_FLOW_RANK.get(symbol)
-            if not is_mf_signal and prev_rank and prev_rank - rank >= SIGNIFICANT_JUMP:
-                sig_type = "Money Flow (Jump)"
-                is_mf_signal = True
-            
-            # Entering Top 10 first time
-            if not is_mf_signal and rank <= 10 and symbol not in HAS_FIRED_TOP_10:
-                sig_type = "Money Flow (Top 10)"
-                HAS_FIRED_TOP_10.add(symbol)
-                is_mf_signal = True
-                
-            # Significant Share
-            if not is_mf_signal and share >= SIGNIFICANT_SHARE:
-                sig_type = "Money Flow (High Share)"
-                is_mf_signal = True
-
-            if is_mf_signal:
-                sig_val = share * 100  # 1.5% -> 1.5
+        # 4. Money Flow Top 5 (runs all day — top 5 by share of total watchlist value)
+        if not sig_type and rank <= MONEY_FLOW_TOP_N:
+            sig_type = f"Money Flow #{rank}"
+            sig_val = share * 100   # e.g. 2.5 for 2.5%
+            ratio = share * 100     # reuse ratio field for badge display
 
         # Only show signals if price is in the green or neutral (Momentum for Calls/Spikes)
         if sig_type and quote.get("change_pct", 0.0) < 0:
@@ -213,20 +190,21 @@ def compute_all_signals() -> list[StockSignal]:
                     last_price=quote["last_price"],
                     change_pct=quote.get("change_pct", 0.0),
                     today_volume=quote["today_volume"],
-                    avg_5d_volume=vol_prev_60 if sig_type == "Intraday Spike" else 0, # Used for display
+                    avg_5d_volume=vol_prev_60 if sig_type == "Intraday Spike" else avg5d,
                     volume_ratio=round(ratio, 2),
                     strength=strength,
                     signal_type=sig_type,
                     signal_value=sig_val,
-                    dw_list=DW_UNIVERSE.get(symbol, []),
+                    dw_list=sorted(
+                        [dw for dw in DW_UNIVERSE.get(symbol, []) if dw.dw_type == 'Call'],
+                        key=lambda d: d.dw_volume, reverse=True
+                    )[:5],
                     updated_at=now_str,
-                    sparkline=quote.get("sparkline", [])
+                    sparkline=quote.get("sparkline", []),
+                    ohlc=quote.get("ohlc", [])
                 )
             )
         
-        # Update previous rank for next iteration
-        PREV_MONEY_FLOW_RANK[symbol] = rank
-
     # Sort deeply based on unified signal_value scale
     results.sort(key=lambda x: x.signal_value, reverse=True)
     return results

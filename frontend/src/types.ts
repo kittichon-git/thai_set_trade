@@ -13,6 +13,15 @@ export interface DWItem {
   dw_volume: number;
 }
 
+export interface OHLCBar {
+  time: string; // "YYYY-MM-DD"
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
 export interface StockSignal {
   symbol: string;
   last_price: number;
@@ -20,12 +29,13 @@ export interface StockSignal {
   today_volume: number;
   avg_5d_volume: number;
   volume_ratio: number;
-  strength: string; 
+  strength: string;
   signal_type: string;
   signal_value: number;
   dw_list: DWItem[];
   updated_at: string;
   sparkline: number[];
+  ohlc?: OHLCBar[];
 }
 
 export interface DashboardPayload {

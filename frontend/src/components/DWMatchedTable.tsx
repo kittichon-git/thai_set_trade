@@ -1,7 +1,7 @@
 // DWMatchedTable.tsx — Desktop/tablet DW items table with filter + sort
 import { memo, useState, useMemo } from 'react';
 import type { DWItem } from '../types';
-import { formatThaiDate } from '../utils/format';
+import { formatVolume } from '../utils/format';
 
 interface Props {
   dwList: DWItem[];
@@ -9,20 +9,20 @@ interface Props {
 }
 
 type FilterType = 'all' | 'Call' | 'Put';
-type SortKey = 'dw_code' | 'dw_type' | 'issuer' | 'dw_price' | 'gearing' | 'moneyness' | 'expiry_date' | 'days_remaining';
+type SortKey = 'dw_code' | 'dw_type' | 'issuer' | 'dw_price' | 'moneyness' | 'dw_volume';
 type SortDir = 'asc' | 'desc';
 
 const DWMatchedTable = memo(({ dwList, selectedSymbol }: Props) => {
   const [filter, setFilter] = useState<FilterType>('all');
-  const [sortKey, setSortKey] = useState<SortKey>('gearing');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortKey, setSortKey] = useState<SortKey>('dw_volume');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
-      setSortDir('asc');
+      setSortDir(key === 'dw_volume' ? 'desc' : 'asc');
     }
   };
 
@@ -91,34 +91,24 @@ const DWMatchedTable = memo(({ dwList, selectedSymbol }: Props) => {
               <th className={thClass} onClick={() => handleSort('dw_code')}>
                 DW Code <SortIndicator col="dw_code" />
               </th>
-              <th className={thClass} onClick={() => handleSort('dw_type')}>
-                ประเภท <SortIndicator col="dw_type" />
-              </th>
               <th className={thClass} onClick={() => handleSort('issuer')}>
                 ผู้ออก <SortIndicator col="issuer" />
               </th>
               <th className={`${thClass} text-right`} onClick={() => handleSort('dw_price')}>
                 ราคา฿ <SortIndicator col="dw_price" />
               </th>
-              <th className={`${thClass} text-right`} onClick={() => handleSort('gearing')}>
-                อัตราทด <SortIndicator col="gearing" />
-              </th>
-              {/* Moneyness hidden on tablet — shown only on desktop */}
               <th className={`${thClass} hidden lg:table-cell`} onClick={() => handleSort('moneyness')}>
                 Moneyness <SortIndicator col="moneyness" />
               </th>
-              <th className={thClass} onClick={() => handleSort('expiry_date')}>
-                วันหมดอายุ <SortIndicator col="expiry_date" />
-              </th>
-              <th className={`${thClass} text-right`} onClick={() => handleSort('days_remaining')}>
-                วันเหลือ <SortIndicator col="days_remaining" />
+              <th className={`${thClass} text-right`} onClick={() => handleSort('dw_volume')}>
+                Volume <SortIndicator col="dw_volume" />
               </th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-slate-500 py-6 text-sm">
+                <td colSpan={5} className="text-center text-slate-500 py-6 text-sm">
                   ไม่มี DW ที่ตรงตามเงื่อนไข
                 </td>
               </tr>
@@ -133,39 +123,16 @@ const DWMatchedTable = memo(({ dwList, selectedSymbol }: Props) => {
                 <td className="py-2 px-2 font-mono font-semibold text-slate-200 text-xs">
                   {dw.dw_code}
                 </td>
-                <td className="py-2 px-2">
-                  <span
-                    className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      dw.dw_type === 'Call'
-                        ? 'bg-blue-900/60 text-blue-300'
-                        : 'bg-red-900/60 text-red-300'
-                    }`}
-                  >
-                    {dw.dw_type === 'Call' ? '📈 Call' : '📉 Put'}
-                  </span>
-                </td>
                 <td className="py-2 px-2 text-slate-300 text-xs">{dw.issuer}</td>
                 <td className="py-2 px-2 text-right num text-slate-200 text-xs">
                   {dw.dw_price.toFixed(2)}
                 </td>
-                <td className="py-2 px-2 text-right num text-slate-200 text-xs">
-                  {dw.gearing.toFixed(2)}x
-                </td>
                 <td className="py-2 px-2 text-slate-400 text-xs hidden lg:table-cell">
                   {dw.moneyness}
                 </td>
-                <td className="py-2 px-2 text-slate-300 text-xs num">
-                  {formatThaiDate(dw.expiry_date)}
-                </td>
                 <td className="py-2 px-2 text-right num text-xs">
-                  <span
-                    className={
-                      dw.days_remaining <= 30
-                        ? 'text-orange-400 font-semibold'
-                        : 'text-slate-400'
-                    }
-                  >
-                    {dw.days_remaining}d
+                  <span className={dw.dw_volume > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
+                    {dw.dw_volume > 0 ? formatVolume(dw.dw_volume) : '—'}
                   </span>
                 </td>
               </tr>

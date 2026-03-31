@@ -1,7 +1,7 @@
 // DWMatchedCard.tsx — Mobile DW items card list with filter
 import { memo, useState, useMemo } from 'react';
 import type { DWItem } from '../types';
-import { formatThaiDate } from '../utils/format';
+import { formatVolume } from '../utils/format';
 
 interface Props {
   dwList: DWItem[];
@@ -84,22 +84,12 @@ const DWMatchedCard = memo(({ dwList }: Props) => {
               <span className="text-slate-500">ราคา</span>
               <span className="text-slate-200 num font-medium">฿{dw.dw_price.toFixed(2)}</span>
 
-              <span className="text-slate-500">อัตราทด</span>
-              <span className="text-slate-200 num">{dw.gearing.toFixed(2)}x</span>
-
               <span className="text-slate-500">Moneyness</span>
               <span className="text-slate-300">{dw.moneyness}</span>
 
-              <span className="text-slate-500">วันหมดอายุ</span>
-              <span className="text-slate-300 num">{formatThaiDate(dw.expiry_date)}</span>
-
-              <span className="text-slate-500">วันเหลือ</span>
-              <span
-                className={`num font-medium ${
-                  dw.days_remaining <= 30 ? 'text-orange-400' : 'text-slate-300'
-                }`}
-              >
-                {dw.days_remaining} วัน
+              <span className="text-slate-500">Volume</span>
+              <span className={`num font-semibold ${dw.dw_volume > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                {dw.dw_volume > 0 ? formatVolume(dw.dw_volume) : '—'}
               </span>
             </div>
           </div>

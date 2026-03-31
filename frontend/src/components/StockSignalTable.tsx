@@ -6,6 +6,7 @@ import VolumeRatioBadge from './VolumeRatioBadge';
 import PriceChange from './PriceChange';
 import Sparkline from '../utils/Sparkline';
 import DWMatchedTable from './DWMatchedTable';
+import CandlestickChart from './CandlestickChart';
 
 interface Props {
   title: string;
@@ -41,6 +42,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
   }, [signal.volume_ratio]);
 
   const isDesktop = breakpoint === 'desktop';
+  const ohlc = signal.ohlc ?? [];
 
   return (
     <>
@@ -138,13 +140,46 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
         </td>
       </tr>
 
-      {/* Accordion: DW matched table */}
+      {/* Accordion: chart + DW list */}
       {isExpanded && (
         <tr>
           <td
             colSpan={isDesktop ? 9 : 8}
-            className="bg-slate-900/60 px-4 py-4 border-t border-slate-700/40"
+            className="bg-slate-900/60 px-4 py-4 border-t border-slate-700/40 slide-down"
           >
+            {/* Price chart */}
+            {ohlc.length >= 1 ? (
+              <div className="mb-4 bg-slate-800/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-slate-400 font-medium">{signal.symbol} — แท่งเทียนรายวัน</span>
+                  <span className="text-xs num">
+                    <span className="text-slate-500">฿{ohlc[0].close.toFixed(2)} → </span>
+                    <span className={ohlc[ohlc.length-1].close >= ohlc[0].close ? 'text-emerald-400' : 'text-red-400'}>
+                      ฿{ohlc[ohlc.length-1].close.toFixed(2)}
+                    </span>
+                  </span>
+                </div>
+                <CandlestickChart data={ohlc} height={160} />
+              </div>
+            ) : signal.sparkline.length >= 2 ? (
+              <div className="mb-4 bg-slate-800/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-slate-400 font-medium">{signal.symbol} — ราคา 5 วันล่าสุด</span>
+                  <span className="text-xs num">
+                    <span className="text-slate-500">฿{signal.sparkline[0].toFixed(2)} → </span>
+                    <span className={signal.sparkline[signal.sparkline.length-1] >= signal.sparkline[0] ? 'text-emerald-400' : 'text-red-400'}>
+                      ฿{signal.sparkline[signal.sparkline.length-1].toFixed(2)}
+                    </span>
+                  </span>
+                </div>
+                <Sparkline data={signal.sparkline} width={isDesktop ? 500 : 320} height={72} showArea showDots />
+              </div>
+            ) : null}
+            {/* DW Call list */}
+            <div className="text-xs text-slate-500 mb-2 font-medium">
+              📋 DW Call ที่เข้าเงื่อนไข — {signal.symbol}
+              <span className="ml-2 text-slate-600">({signal.dw_list.length} รายการ เรียงตาม Volume)</span>
+            </div>
             <DWMatchedTable dwList={signal.dw_list} selectedSymbol={signal.symbol} />
           </td>
         </tr>

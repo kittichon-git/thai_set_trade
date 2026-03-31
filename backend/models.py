@@ -30,6 +30,7 @@ class StockSignal(BaseModel):
     dw_list: list[DWItem] = Field(default_factory=list)
     updated_at: str
     sparkline: list[float] = Field(default_factory=list)  # 5 daily closes oldest->newest
+    ohlc: list[dict] = Field(default_factory=list)        # [{time, open, high, low, close}]
 
 
 class DashboardPayload(BaseModel):

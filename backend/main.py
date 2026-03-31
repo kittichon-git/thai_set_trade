@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from models import DashboardPayload, WSMessage, StockSignal
 from dw_scraper import scrape_dw_universe, scrape_dw_universe_playwright, DW_UNIVERSE, DW_ALL_COLLECTED
 from stock_feed import fetch_stock_quotes, STOCK_DATA
-from signal_engine import compute_signals, compute_all_signals, refresh_m1_history
+from signal_engine import compute_all_signals, refresh_m1_history
 from signal_logger import (
     load_log, 
     record_signals, 
@@ -129,12 +129,19 @@ def build_payload() -> DashboardPayload:
 
     # Initial pass from history
     for rec in history_records:
-        # Restore full DW list from universe
-        dw_list = DW_UNIVERSE.get(rec.symbol, [])
-        
+        # Restore DW list: Call only, top 5 by volume (same as signal_engine)
+        all_dws = DW_UNIVERSE.get(rec.symbol, [])
+        dw_list = sorted(
+            [dw for dw in all_dws if dw.dw_type == 'Call'],
+            key=lambda d: d.dw_volume, reverse=True
+        )[:5]
+
         # Get latest pulse for the type and value
         last_pulse = rec.pulses[-1] if rec.pulses else None
-        
+
+        # Pull sparkline + ohlc from live cache
+        stock_cache = STOCK_DATA.get(rec.symbol, {})
+
         merged_map[rec.symbol] = StockSignal(
             symbol=rec.symbol,
             last_price=rec.last_price,
@@ -147,7 +154,8 @@ def build_payload() -> DashboardPayload:
             signal_value=last_pulse.signal_value if last_pulse else 0.0,
             dw_list=dw_list,
             updated_at=f"{rec.date} {rec.last_seen}",
-            sparkline=[], # Records don't store sparklines currently
+            sparkline=stock_cache.get("sparkline", []),
+            ohlc=stock_cache.get("ohlc", []),
         )
 
     # Overwrite/Update with fresher active signals
