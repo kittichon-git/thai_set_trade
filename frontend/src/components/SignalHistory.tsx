@@ -189,22 +189,44 @@ const SignalHistory = memo(({ apiUrl }: Props) => {
                     <div className="text-xs text-slate-500 mb-2 font-medium">Timeline สัญญาณ</div>
                     <div className="space-y-1.5">
                       {rec.pulses.map((pulse, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          {/* Timeline dot */}
-                          <div className="flex flex-col items-center w-4">
-                            <div className={`w-2 h-2 rounded-full ${
-                              pulse.ratio >= 5.0 ? 'bg-red-500' :
-                              pulse.ratio >= 3.0 ? 'bg-orange-500' : 'bg-yellow-500'
-                            }`} />
-                            {i < rec.pulses.length - 1 && (
-                              <div className="w-px h-4 bg-slate-700 mt-0.5" />
-                            )}
+                        <div key={i} className="flex flex-col gap-1 pb-2 border-b border-slate-800/30 last:border-0">
+                          <div className="flex items-center gap-3">
+                            {/* Timeline dot */}
+                            <div className="flex flex-col items-center w-4">
+                              <div className={`w-2 h-2 rounded-full ${
+                                pulse.ratio >= 5.0 ? 'bg-red-500' :
+                                pulse.ratio >= 3.0 ? 'bg-orange-500' : 'bg-yellow-500'
+                              }`} />
+                            </div>
+                            <span className="text-slate-500 num font-mono text-xs w-16">{pulse.time}</span>
+                            <span className="text-[10px] bg-slate-800 text-blue-300 px-1.5 py-0.5 rounded border border-slate-700/40 uppercase font-bold tracking-wider">
+                              {pulse.signal_type || 'Volume'}
+                            </span>
+                            <VolumeRatioBadge ratio={pulse.ratio} strength={pulse.strength} />
                           </div>
-                          <span className="text-slate-500 num font-mono text-xs w-16">{pulse.time}</span>
-                          <span className="text-[10px] bg-slate-800 text-blue-300 px-1.5 py-0.5 rounded border border-slate-700/40 uppercase font-bold tracking-wider">
-                             {pulse.signal_type || 'Volume'}
-                          </span>
-                          <VolumeRatioBadge ratio={pulse.ratio} strength={pulse.strength} />
+                          {/* DW bid/ask ณ เวลาสัญญาณ */}
+                          {pulse.top_dw_code && (
+                            <div className="ml-7 flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
+                                {pulse.top_dw_code}
+                              </span>
+                              {pulse.top_dw_volume != null && (
+                                <span className="text-xs text-slate-500">
+                                  Vol {pulse.top_dw_volume.toLocaleString()}
+                                </span>
+                              )}
+                              {pulse.top_dw_bid != null && pulse.top_dw_bid > 0 && (
+                                <span className="text-xs text-slate-400">
+                                  Bid <span className="text-red-400 num">{pulse.top_dw_bid.toFixed(2)}</span>
+                                </span>
+                              )}
+                              {pulse.top_dw_ask != null && pulse.top_dw_ask > 0 && (
+                                <span className="text-xs text-slate-400">
+                                  Ask <span className="text-emerald-400 num">{pulse.top_dw_ask.toFixed(2)}</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

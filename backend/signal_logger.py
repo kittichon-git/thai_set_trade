@@ -11,13 +11,34 @@ from models import SignalRecord, SignalPulse, StockSignal
 from database import supabase
 from data_provider import get_provider
 
+try:
+    import MetaTrader5 as _mt5
+except ImportError:
+    _mt5 = None
+
+def _get_dw_tick(dw_code: str) -> tuple[float, float]:
+    """ดึง bid/ask ของ DW จาก MT5 คืนค่า (bid, ask)"""
+    if not _mt5:
+        return (0.0, 0.0)
+    try:
+        _mt5.initialize()
+        _mt5.symbol_select(dw_code, True)
+        tick = _mt5.symbol_info_tick(dw_code)
+        if tick:
+            return (tick.bid, tick.ask)
+    except Exception:
+        pass
+    return (0.0, 0.0)
+
 logger = logging.getLogger(__name__)
 TZ = pytz.timezone("Asia/Bangkok")
 
 # Current Day Cache
 _today_signals: dict[str, SignalRecord] = {}
 _last_pulse: dict[str, datetime] = {}
-PULSE_MIN_SECONDS = 300
+_last_money_flow_pulse: dict[str, datetime] = {}  # cooldown แยกสำหรับ Money Flow
+PULSE_MIN_SECONDS = 300           # cooldown ทั่วไป 5 นาที
+MONEY_FLOW_MIN_SECONDS = 3600     # cooldown Money Flow 1 ชั่วโมง
 
 def load_log() -> None:
     """Startup load of today's signals from Supabase."""
@@ -63,21 +84,31 @@ def record_signals(all_signals: list[StockSignal]) -> None:
         quote = quotes.get(sig.symbol, {})
         entry_price = quote.get("ask_price") or sig.last_price
         
+        # DW ที่ volume สูงสุด ณ ขณะนี้ (dw_list เรียงตาม volume แล้ว)
+        top_dw = sig.dw_list[0] if sig.dw_list else None
+        top_dw_bid, top_dw_ask = _get_dw_tick(top_dw.dw_code) if top_dw else (0.0, 0.0)
+
         pulse_obj = SignalPulse(
             time=time_str,
             ratio=sig.volume_ratio,
             strength=sig.strength,
             signal_type=sig.signal_type,
             signal_value=sig.signal_value,
-            match_price=entry_price
+            match_price=entry_price,
+            top_dw_code=top_dw.dw_code if top_dw else None,
+            top_dw_volume=top_dw.dw_volume if top_dw else None,
+            top_dw_bid=top_dw_bid if top_dw_bid > 0 else top_dw.dw_price if top_dw else None,
+            top_dw_ask=top_dw_ask if top_dw_ask > 0 else None,
         )
 
+        is_money_flow = sig.signal_type.startswith("Money Flow")
+
         if record_id not in _today_signals:
-            # Create new Signal Record
+            # สำหรับ Money Flow ใหม่ — บันทึก cooldown ด้วย
             rec = SignalRecord(
                 id=record_id, date=date_str, symbol=sig.symbol,
                 first_seen=time_str, last_seen=time_str,
-                pulses=[pulse_obj], max_ratio=sig.volume_ratio, 
+                pulses=[pulse_obj], max_ratio=sig.volume_ratio,
                 strength=sig.strength, last_price=sig.last_price,
                 change_pct=sig.change_pct, avg_5d_volume=sig.avg_5d_volume,
                 today_volume=sig.today_volume, dw_count=len(sig.dw_list),
@@ -85,13 +116,21 @@ def record_signals(all_signals: list[StockSignal]) -> None:
             )
             _today_signals[record_id] = rec
             _last_pulse[sig.symbol] = now
+            if is_money_flow:
+                _last_money_flow_pulse[sig.symbol] = now
             _db_upsert_record(rec)
             _db_insert_pulse(record_id, pulse_obj)
             logger.info("New signal saved: %s type=%s entry=%.2f", sig.symbol, sig.signal_type, entry_price)
         else:
-            # Check for pulse cooldown
-            last_dt = _last_pulse.get(sig.symbol)
-            if last_dt is None or (now - last_dt).total_seconds() >= PULSE_MIN_SECONDS:
+            # เช็ค cooldown ตามประเภท signal
+            if is_money_flow:
+                last_dt = _last_money_flow_pulse.get(sig.symbol)
+                cooldown = MONEY_FLOW_MIN_SECONDS
+            else:
+                last_dt = _last_pulse.get(sig.symbol)
+                cooldown = PULSE_MIN_SECONDS
+
+            if last_dt is None or (now - last_dt).total_seconds() >= cooldown:
                 rec = _today_signals[record_id]
                 rec.pulses.append(pulse_obj)
                 rec.last_seen = time_str
@@ -99,6 +138,8 @@ def record_signals(all_signals: list[StockSignal]) -> None:
                     rec.max_ratio = sig.volume_ratio
                     rec.strength = sig.strength
                 _last_pulse[sig.symbol] = now
+                if is_money_flow:
+                    _last_money_flow_pulse[sig.symbol] = now
                 _db_upsert_record(rec)
                 _db_insert_pulse(record_id, pulse_obj)
                 logger.info("Pulse added: %s type=%s entry=%.2f", sig.symbol, sig.signal_type, entry_price)
@@ -108,6 +149,11 @@ def _db_upsert_record(rec: SignalRecord) -> None:
     data = rec.model_dump()
     data.pop("pulses", None)
     data["record_id"] = data.pop("id")
+    # Cap volume values to PostgreSQL integer max (2,147,483,647)
+    _MAX_INT = 2_147_483_647
+    for key in ("today_volume", "avg_5d_volume"):
+        if data.get(key) is not None:
+            data[key] = min(int(data[key]), _MAX_INT)
     try:
         supabase.table("DW_signal_records").upsert(data).execute()
     except Exception as e:

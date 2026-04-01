@@ -63,6 +63,10 @@ export interface SignalPulse {
   close_price?: number;
   profit_high_pct?: number;
   profit_close_pct?: number;
+  top_dw_code?: string;
+  top_dw_volume?: number;
+  top_dw_bid?: number;
+  top_dw_ask?: number;
 }
 
 export interface SignalRecord {

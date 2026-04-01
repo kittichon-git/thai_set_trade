@@ -21,8 +21,11 @@ SPIKE_THRESHOLD      = 3.0   # 15m vol > 3x prev 60m avg
 MONEY_FLOW_TOP_N     = 5     # Top 5 by money flow share
 
 # State Storage
-YESTERDAY_OPENING_VOL: dict[str, int] = {}
+YESTERDAY_OPENING_CUM: dict[str, dict[int, int]] = {}  # sym -> {minute_offset: cum_vol}
 INTRADAY_CUM_VOL: dict[str, dict[datetime, int]] = {}
+GAP_UP_FIRED_TODAY: set[str] = set()       # symbols ที่ Gap Up ยิงไปแล้ววันนี้
+OPENING_VOL_FIRED_TODAY: set[str] = set()  # symbols ที่ Opening Vol ยิงไปแล้ววันนี้
+_GAP_UP_DATE: str = ""                     # วันที่ reset ล่าสุด
 
 # SET Market hours (Thai Time)
 MORNING_OPEN = time(10, 0)
@@ -30,30 +33,35 @@ MORNING_OPEN = time(10, 0)
 
 async def refresh_m1_history():
     """Startup: Fetch M1 volume for opening comparison and restore intraday cum vol."""
-    global YESTERDAY_OPENING_VOL, INTRADAY_CUM_VOL
+    global YESTERDAY_OPENING_CUM, INTRADAY_CUM_VOL
     provider = get_provider()
     symbols = list(DW_UNIVERSE.keys())
     if not symbols: return
-    
+
     logger.info("Initializing M1 history for %d underlyings...", len(symbols))
-    # Fetch last 2 days (up to ~2880 bars)
     history = provider.get_recent_m1_history(symbols, days=2)
-    
+
     now_date = datetime.now(TZ).date()
-    
-    YESTERDAY_OPENING_VOL.clear()
+
+    YESTERDAY_OPENING_CUM.clear()
     INTRADAY_CUM_VOL.clear()
-    
+
     for sym, bars in history.items():
         dates = sorted({dt.date() for dt in bars.keys()})
-        # 1. Calculate Yesterday Opening Vol (10:00 - 10:15)
+
+        # 1. Yesterday per-minute cumulative vol ช่วง 10:00-10:15
         if len(dates) >= 2:
             yesterday = dates[-2]
-            start_time = datetime.combine(yesterday, time(10, 0), tzinfo=TZ)
-            end_time = datetime.combine(yesterday, time(10, 15), tzinfo=TZ)
-            y_vol = sum(v for dt, v in bars.items() if start_time <= dt <= end_time)
-            YESTERDAY_OPENING_VOL[sym] = y_vol
-        
+            cum = 0
+            per_min: dict[int, int] = {}
+            for dt, v in sorted(bars.items()):
+                if dt.date() == yesterday and time(10, 0) <= dt.time() <= time(10, 15):
+                    offset = (dt.hour - 10) * 60 + dt.minute  # 0=10:00, 1=10:01, ...
+                    cum += v
+                    per_min[offset] = cum
+            if per_min:
+                YESTERDAY_OPENING_CUM[sym] = per_min
+
         # 2. Rebuild Today's Cumulative Volume for Intraday Spike
         cum_vol = 0
         sym_cum_dict = {}
@@ -64,7 +72,7 @@ async def refresh_m1_history():
         if sym_cum_dict:
             INTRADAY_CUM_VOL[sym] = sym_cum_dict
 
-    logger.info("Yesterday's data and Intraday Vol tracker loaded for %d symbols", len(history))
+    logger.info("Yesterday opening cum-vol and intraday tracker loaded for %d symbols", len(history))
 
 
 def get_past_cum_vol(sym: str, target_min: datetime) -> int:
@@ -92,11 +100,20 @@ def compute_all_signals() -> list[StockSignal]:
     quotes = provider.get_quotes(symbols)
     if not quotes: return []
     
+    global GAP_UP_FIRED_TODAY, _GAP_UP_DATE
+
     results: list[StockSignal] = []
     now = datetime.now(TZ)
     now_time = now.time()
     now_str = now.strftime("%Y-%m-%d %H:%M:%S")
     curr_min = now.replace(second=0, microsecond=0)
+
+    # Reset trackers ทุกวันใหม่
+    today_str = now.strftime("%Y-%m-%d")
+    if today_str != _GAP_UP_DATE:
+        GAP_UP_FIRED_TODAY.clear()
+        OPENING_VOL_FIRED_TODAY.clear()
+        _GAP_UP_DATE = today_str
     
     # -----------------------------------------------------------------------
     # Logic 4: Money Flow Calculation (Total Watchlist Value)
@@ -137,18 +154,20 @@ def compute_all_signals() -> list[StockSignal]:
         ratio = 0.0
         avg5d = quote.get("avg_5d_volume", 0)
 
-        # 1. Opening Vol Anomaly (First 15 mins)
-        # Compare current cumulative vol (up to 15m) vs yesterday's FULL 15m (or proportional)
-        if time(10, 0) <= now_time <= time(10, 15):
-            y_vol = YESTERDAY_OPENING_VOL.get(symbol, 0)
-            if y_vol > 0:
-                ratio = today_vol / y_vol
+        # 1. Opening Vol Anomaly (10:00-10:15) — เปรียบเทียบนาทีต่อนาทีกับเมื่อวาน
+        if time(10, 0) <= now_time <= time(10, 15) and symbol not in OPENING_VOL_FIRED_TODAY:
+            minute_offset = (now.hour - 10) * 60 + now.minute
+            y_cum_at_m = YESTERDAY_OPENING_CUM.get(symbol, {}).get(minute_offset, 0)
+            if y_cum_at_m > 0:
+                today_cum_at_m = get_past_cum_vol(symbol, curr_min)
+                ratio = today_cum_at_m / y_cum_at_m
                 if ratio >= OPENING_THRESHOLD:
                     sig_type = "Opening Vol"
                     sig_val = ratio
+                    OPENING_VOL_FIRED_TODAY.add(symbol)
         
-        # 2. Gap Up + Vol (independent of Opening Vol window — runs all day)
-        if quote.get("today_open", 0) > quote.get("prev_high", 0) > 0:
+        # 2. Gap Up + Vol (ยิงได้แค่ครั้งเดียวต่อวันต่อ symbol)
+        if symbol not in GAP_UP_FIRED_TODAY and quote.get("today_open", 0) > quote.get("prev_high", 0) > 0:
             avg5d = quote.get("avg_5d_volume", 0)
             gap_ratio = (today_vol / avg5d) if avg5d > 0 else 0.0
             if gap_ratio >= OPENING_THRESHOLD:
@@ -156,6 +175,7 @@ def compute_all_signals() -> list[StockSignal]:
                 gap_pct = ((quote["today_open"] - quote["prev_high"]) / quote["prev_high"]) * 100
                 ratio = gap_ratio
                 sig_val = gap_pct + gap_ratio
+                GAP_UP_FIRED_TODAY.add(symbol)
 
         # 3. Intraday Volume Spike
         if sig_type is None and now_time > time(10, 15):

@@ -58,6 +58,11 @@ class SignalPulse(BaseModel):
     close_price: Optional[float] = None
     profit_high_pct: Optional[float] = None
     profit_close_pct: Optional[float] = None
+    # DW ที่ volume สูงสุด ณ ขณะที่สัญญาณยิง
+    top_dw_code: Optional[str] = None
+    top_dw_volume: Optional[int] = None
+    top_dw_bid: Optional[float] = None
+    top_dw_ask: Optional[float] = None
 
 
 class SignalRecord(BaseModel):

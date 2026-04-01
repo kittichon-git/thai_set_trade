@@ -158,58 +158,70 @@ class MT5Provider(DataProvider):
     def _fetch_quotes(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
         if not mt5 or not mt5.initialize():
             return {}
-        
+
         results = {}
         for s in symbols:
             m_sym = self._get_mt5_symbol(s)
+            mt5.symbol_select(m_sym, True)
             tick = mt5.symbol_info_tick(m_sym)
             info = mt5.symbol_info(m_sym)
-            
-            if tick and info:
-                # Fetch 5-day daily closes for sparkline
-                rates = mt5.copy_rates_from_pos(m_sym, mt5.TIMEFRAME_D1, 0, 5)
-                sparkline = [float(r.close) for r in rates] if rates is not None else []
-                prev_high = float(rates[-2].high) if rates is not None and len(rates) >= 2 else 0.0
 
-                avg_5d_volume = int(sum(r.tick_volume for r in rates) / len(rates)) if rates is not None and len(rates) > 0 else 0
-                ohlc = []
-                if rates is not None:
-                    for r in rates:
-                        try:
-                            dt = datetime.fromtimestamp(r.time, TZ)
-                            vol = int(r.real_volume) if hasattr(r, 'real_volume') and r.real_volume > 0 else int(r.tick_volume)
-                            ohlc.append({
-                                "time": dt.strftime("%Y-%m-%d"),
-                                "open": float(r.open), "high": float(r.high),
-                                "low": float(r.low), "close": float(r.close),
-                                "volume": vol,
-                            })
-                        except Exception:
-                            pass
-                results[s] = {
-                    "last_price": tick.last,
-                    "today_volume": info.volume_real if hasattr(info, 'volume_real') else info.volume,
-                    "avg_5d_volume": avg_5d_volume,
-                    "today_open": info.session_open,
-                    "prev_high": prev_high,
-                    "today_high": info.session_price_high,
-                    "ask_price": tick.ask,
-                    "change_pct": (tick.last - info.price_prev_close) / info.price_prev_close * 100.0 if info.price_prev_close > 0 else 0.0,
-                    "sparkline": sparkline,
-                    "ohlc": ohlc,
-                }
+            if not info:
+                continue
+
+            # Fetch 30-day daily bars for sparkline + OHLC
+            rates = mt5.copy_rates_from_pos(m_sym, mt5.TIMEFRAME_D1, 0, 30)
+            sparkline = [float(r[4]) for r in rates[-5:]] if rates is not None and len(rates) >= 1 else []
+            prev_high = float(rates[-2][2]) if rates is not None and len(rates) >= 2 else 0.0
+            avg_5d_volume = int(sum(r[7] if r[7] > 0 else r[5] for r in rates[-5:]) / min(5, len(rates))) if rates is not None and len(rates) > 0 else 0
+
+            ohlc = []
+            if rates is not None:
+                for r in rates:
+                    try:
+                        dt = datetime.fromtimestamp(r[0], TZ)
+                        vol = int(r[7]) if r[7] > 0 else int(r[5])
+                        ohlc.append({
+                            "time": dt.strftime("%Y-%m-%d"),
+                            "open": float(r[1]), "high": float(r[2]),
+                            "low": float(r[3]), "close": float(r[4]),
+                            "volume": vol,
+                        })
+                    except Exception:
+                        pass
+
+            # ราคาล่าสุด: ใช้ tick.last ถ้ามี ถ้าไม่มี (ตลาดปิด) ใช้ราคาปิดล่าสุดจาก rates
+            last_price = tick.last if tick and tick.last > 0 else (float(rates[-1][4]) if rates is not None and len(rates) > 0 else 0.0)
+            ask_price  = tick.ask  if tick and tick.ask  > 0 else last_price
+            prev_close = float(rates[-2][4]) if rates is not None and len(rates) >= 2 else 0.0
+            change_pct = (last_price - prev_close) / prev_close * 100.0 if prev_close > 0 else 0.0
+
+            today_volume = int(info.session_volume) if info.session_volume > 0 else (int(rates[-1][7]) if rates is not None and len(rates) > 0 and rates[-1][7] > 0 else int(rates[-1][5]) if rates is not None and len(rates) > 0 else 0)
+
+            results[s] = {
+                "last_price": last_price,
+                "today_volume": today_volume,
+                "avg_5d_volume": avg_5d_volume,
+                "today_open": getattr(info, 'session_open', 0.0) or (float(rates[-1][1]) if rates is not None and len(rates) > 0 else 0.0),
+                "prev_high": prev_high,
+                "today_high": getattr(info, 'session_price_high', 0.0) or (float(rates[-1][2]) if rates is not None and len(rates) > 0 else 0.0),
+                "ask_price": ask_price,
+                "change_pct": change_pct,
+                "sparkline": sparkline,
+                "ohlc": ohlc,
+            }
         return results
 
     def get_recent_m1_history(self, symbols: list[str], days: int = 2) -> dict[str, dict[datetime, int]]:
         """Fetch M1 bars for recent days using MT5."""
         if not mt5 or not mt5.initialize():
             return {}
-        
+
         results = {}
-        # 1 day is approx 1440 minutes max
         bars_to_fetch = 1440 * days
         for s in symbols:
             m_sym = self._get_mt5_symbol(s)
+            mt5.symbol_select(m_sym, True)
             rates = mt5.copy_rates_from_pos(m_sym, mt5.TIMEFRAME_M1, 0, bars_to_fetch)
             if rates is not None and len(rates) > 0:
                 history_dict = {}
