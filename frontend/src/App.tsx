@@ -2,7 +2,6 @@
 import { useState, useCallback } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useBreakpoint } from './hooks/useBreakpoint';
-import ConnectionBanner from './components/ConnectionBanner';
 import EmptyDWBanner from './components/EmptyDWBanner';
 import LoadingState from './components/LoadingState';
 import StockSignalTable from './components/StockSignalTable';
@@ -154,7 +153,7 @@ export default function App() {
   const pageTitle = NAV_ITEMS.find(n => n.id === activeTab)?.label ?? 'Dashboard';
 
   return (
-    <div className="min-h-[100dvh] bg-slate-950 text-slate-100 flex">
+    <div className="min-h-[100dvh] bg-[#0d1117] text-slate-100 flex">
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       {/* Mobile overlay */}
@@ -164,87 +163,101 @@ export default function App() {
 
       <aside className={`
         fixed top-0 left-0 h-full z-50 flex flex-col
-        w-56 bg-slate-900 border-r border-slate-800
+        w-56 bg-[#111827] border-r border-white/5
         transition-transform duration-200
         ${isMobile ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full') : 'translate-x-0'}
       `}>
         {/* Logo */}
-        <div className="flex items-center gap-2 px-4 py-4 border-b border-slate-800">
-          <span className="text-lg">📈</span>
-          <span className="font-bold text-slate-100 text-sm tracking-wide">Thai SET Trade</span>
+        <div className="flex items-center gap-3 px-5 py-5">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-emerald-500/30">T</div>
+          <span className="font-bold text-white text-sm tracking-wide">Thai SET Trade</span>
         </div>
 
-        {/* Connection status */}
-        <div className="px-4 py-2 border-b border-slate-800">
-          <div className={`flex items-center gap-2 text-xs ${
-            status === 'connected' ? 'text-emerald-400' :
-            status === 'connecting' ? 'text-yellow-400' : 'text-red-400'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${
-              status === 'connected' ? 'bg-emerald-400' :
-              status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'
-            }`} />
-            {status === 'connected' ? 'เชื่อมต่อแล้ว' : status === 'connecting' ? 'กำลังเชื่อมต่อ...' : 'ขาดการเชื่อมต่อ'}
+        {/* Nav */}
+        <nav className="flex-1 px-3 pb-4 overflow-y-auto">
+          <div className="mb-2 px-2">
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">MARKET</span>
           </div>
-          {lastUpdate && <div className="text-xs text-slate-600 mt-0.5">{lastUpdate}</div>}
-        </div>
-
-        {/* Nav items */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5">
           {NAV_ITEMS.map(({ id, icon, label }) => (
             <button
               key={id}
               onClick={() => { setActiveTab(id as Tab); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all mb-0.5 ${
                 activeTab === id
-                  ? 'bg-slate-800 text-slate-100 font-medium'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                  ? 'bg-emerald-500/15 text-emerald-400 font-medium shadow-sm'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`}
             >
-              <span className="text-base">{icon}</span>
+              <span className="text-base leading-none">{icon}</span>
               <span>{label}</span>
               {id === 'dw-universe' && payload?.dw_universe_count ? (
-                <span className="ml-auto text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full num">{payload.dw_universe_count}</span>
+                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full num">{payload.dw_universe_count}</span>
               ) : id === 'dw-all' && payload?.dw_all_count ? (
-                <span className="ml-auto text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full num">{payload.dw_all_count}</span>
+                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full num">{payload.dw_all_count}</span>
               ) : null}
             </button>
           ))}
         </nav>
 
-        {/* Market status footer */}
-        {payload && (
-          <div className="px-4 py-3 border-t border-slate-800">
-            <div className="text-xs text-slate-500">สถานะตลาด</div>
-            <div className={`text-xs font-medium mt-0.5 ${
-              payload.market_status === 'OPEN' ? 'text-emerald-400' : 'text-slate-400'
-            }`}>{payload.market_status}</div>
-            <div className="text-xs text-slate-600 mt-1">DW {payload.dw_universe_count} ตัว</div>
+        {/* Footer */}
+        <div className="px-4 py-4 border-t border-white/5">
+          <div className={`flex items-center gap-2 text-xs mb-1 ${
+            status === 'connected' ? 'text-emerald-400' :
+            status === 'connecting' ? 'text-yellow-400' : 'text-red-400'
+          }`}>
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              status === 'connected' ? 'bg-emerald-400 shadow-sm shadow-emerald-400' :
+              status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'
+            }`} />
+            {status === 'connected' ? 'เชื่อมต่อแล้ว' : status === 'connecting' ? 'กำลังเชื่อมต่อ...' : 'ขาดการเชื่อมต่อ'}
           </div>
-        )}
+          {payload && (
+            <div className={`text-xs font-semibold px-2 py-1 rounded-lg inline-block mt-1 ${
+              payload.market_status === 'OPEN'
+                ? 'bg-emerald-500/15 text-emerald-400'
+                : 'bg-slate-700/50 text-slate-400'
+            }`}>{payload.market_status}</div>
+          )}
+        </div>
       </aside>
 
       {/* ── Main area ───────────────────────────────────────── */}
       <div className={`flex-1 flex flex-col min-h-[100dvh] ${isMobile ? '' : 'ml-56'}`}>
 
         {/* Top header */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-slate-900/80 backdrop-blur border-b border-slate-800">
+        <header className="sticky top-0 z-30 flex items-center gap-3 px-5 py-3.5 bg-[#0d1117]/90 backdrop-blur-md border-b border-white/5">
           {isMobile && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
             >
               ☰
             </button>
           )}
-          <div>
-            <h1 className="text-sm font-semibold text-slate-100">{pageTitle}</h1>
-            {payload?.timestamp && (
-              <p className="text-xs text-slate-500">{payload.timestamp}</p>
-            )}
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-slate-500">Home</span>
+            <span className="text-slate-700">/</span>
+            <span className="text-slate-200 font-medium">{pageTitle}</span>
           </div>
-          <div className="ml-auto">
-            <ConnectionBanner status={status} />
+          <div className="ml-auto flex items-center gap-2">
+            {payload?.timestamp && (
+              <span className="text-xs text-slate-500 hidden sm:block">{payload.timestamp}</span>
+            )}
+            {payload?.signal_count != null && (
+              <span className="text-xs bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium">
+                {payload.signal_count} สัญญาณ
+              </span>
+            )}
+            {status !== 'connected' && (
+              <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                status === 'connecting'
+                  ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
+                  : 'bg-red-500/15 text-red-400 border-red-500/20'
+              }`}>
+                {status === 'connecting' ? 'กำลังเชื่อมต่อ...' : 'ขาดการเชื่อมต่อ'}
+              </span>
+            )}
           </div>
         </header>
 
@@ -338,7 +351,7 @@ export default function App() {
           )}
         </main>
 
-        <footer className="text-center text-slate-700 text-xs py-3 border-t border-slate-800/40">
+        <footer className="text-center text-slate-700 text-xs py-3 border-t border-white/5">
           thaiwarrant.com + MT5 | อัปเดตทุก 10 วินาที
         </footer>
       </div>
