@@ -110,7 +110,7 @@ const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle, apiUrl }: Pr
                       </span>
                     </span>
                   </div>
-                  <CandlestickChart data={ohlc} height={160} />
+                  <CandlestickChart data={ohlc} height={208} />
                 </div>
               ) : signal.sparkline.length >= 2 ? (
                 <div className="mb-3 bg-slate-800/50 rounded-lg p-3">
@@ -123,7 +123,7 @@ const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle, apiUrl }: Pr
                       </span>
                     </span>
                   </div>
-                  <Sparkline data={signal.sparkline} width={280} height={64} showArea showDots />
+                  <Sparkline data={signal.sparkline} width={280} height={83} showArea showDots />
                 </div>
               ) : null}
               {/* DW Call list */}

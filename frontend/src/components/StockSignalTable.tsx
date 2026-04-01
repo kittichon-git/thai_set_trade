@@ -142,7 +142,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
                     </span>
                   </span>
                 </div>
-                <CandlestickChart data={ohlc} height={160} />
+                <CandlestickChart data={ohlc} height={208} />
               </div>
             ) : signal.sparkline.length >= 2 ? (
               <div className="mb-4 bg-slate-800/50 rounded-lg p-3">
@@ -155,7 +155,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
                     </span>
                   </span>
                 </div>
-                <Sparkline data={signal.sparkline} width={isDesktop ? 500 : 320} height={72} showArea showDots />
+                <Sparkline data={signal.sparkline} width={isDesktop ? 500 : 320} height={94} showArea showDots />
               </div>
             ) : null}
             {/* DW Call list */}
@@ -182,18 +182,8 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiU
 
   const isDesktop = breakpoint === 'desktop';
 
-  if (signals.length === 0) {
-    return (
-      <div className="fade-in text-center py-16 text-slate-500">
-        <div className="text-4xl mb-3">🔍</div>
-        <div className="text-base font-medium">ยังไม่พบสัญญาณ</div>
-        <div className="text-sm mt-1 text-slate-600">กำลังรอข้อมูล...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fade-in mb-8">
+    <div className="fade-in mb-4">
       <div className="mb-3 flex items-center gap-2">
         <span className="text-xl">{icon}</span>
         <span className="text-slate-400 text-sm font-medium">{title}</span>
@@ -201,6 +191,12 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiU
           {signals.length}
         </span>
       </div>
+
+      {signals.length === 0 ? (
+        <div className="text-slate-600 text-xs text-center py-6 border border-slate-800/40 rounded-md bg-slate-900/20">
+          ยังไม่มีสัญญาณประเภทนี้
+        </div>
+      ) :
 
       <div className="table-scroll rounded-md border border-slate-800/60 bg-slate-900/40">
         <table className="w-full">
@@ -246,7 +242,7 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiU
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 });

@@ -145,10 +145,10 @@ export default function App() {
   const isMobile = breakpoint === 'mobile';
 
   const activeSignals = payload?.signals && payload.signals.length > 0 ? payload.signals : MOCK_SIGNALS;
-  const actionableTypes = ['Intraday Spike', 'Opening Vol', 'Gap Up + Vol'];
-  const spikeSignals = activeSignals.filter(s => actionableTypes.includes(s.signal_type)).slice(0, 3);
+  const openingSignals   = activeSignals.filter(s => s.signal_type === 'Opening Vol');
+  const gapUpSignals     = activeSignals.filter(s => s.signal_type === 'Gap Up + Vol');
+  const spikeSignals     = activeSignals.filter(s => s.signal_type === 'Intraday Spike');
   const moneyFlowSignals = activeSignals.filter(s => s.signal_type?.includes('Money Flow')).slice(0, 5);
-  const mainBoardSignals = activeSignals.slice(0, 10);
 
   const pageTitle = NAV_ITEMS.find(n => n.id === activeTab)?.label ?? 'Dashboard';
 
@@ -277,72 +277,42 @@ export default function App() {
                 <LoadingState />
               ) : isMobile ? (
                 <PullToRefresh onRefresh={forceReconnect}>
-                  {activeSignals.length === 0 ? (
-                    <div className="text-center py-16 text-slate-500">
-                      <div className="text-4xl mb-3">🔍</div>
-                      <div className="text-base font-medium">ยังไม่พบสัญญาณ</div>
-                      <div className="text-sm mt-1 text-slate-600">กำลังรอข้อมูล...</div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-6">
-                      {spikeSignals.length > 0 && (
-                        <div>
-                          <div className="mb-3 flex items-center gap-2">
-                            <span className="text-xl">⚡</span>
-                            <span className="text-slate-400 text-sm font-medium">Top Spikes</span>
-                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{spikeSignals.length}</span>
-                          </div>
-                          {spikeSignals.map((sig, idx) => (
-                            <StockSignalCard key={`spike-${sig.symbol}`} signal={sig} rank={idx + 1}
-                              isExpanded={expandedIdx === `spike-${idx}`} onToggle={() => handleToggle(`spike-${idx}`)} apiUrl={API_URL} />
-                          ))}
+                  <div className="flex flex-col gap-6">
+                    {([
+                      { key: 'opening', icon: '🌅', label: 'Opening Vol', signals: openingSignals },
+                      { key: 'gapup',   icon: '📈', label: 'Gap Up + Vol', signals: gapUpSignals },
+                      { key: 'spike',   icon: '⚡', label: 'Intraday Spike', signals: spikeSignals },
+                      { key: 'money',   icon: '💸', label: 'Money Flow', signals: moneyFlowSignals },
+                    ] as const).map(({ key, icon, label, signals }) => (
+                      <div key={key}>
+                        <div className="mb-3 flex items-center gap-2">
+                          <span className="text-xl">{icon}</span>
+                          <span className="text-slate-400 text-sm font-medium">{label}</span>
+                          <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{signals.length}</span>
                         </div>
-                      )}
-                      {mainBoardSignals.length > 0 && (
-                        <div>
-                          <div className="mb-3 flex items-center gap-2">
-                            <span className="text-xl">🔥</span>
-                            <span className="text-slate-400 text-sm font-medium">Main Board — Top 10</span>
-                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{mainBoardSignals.length}</span>
+                        {signals.length === 0 ? (
+                          <div className="text-slate-600 text-xs text-center py-5 border border-slate-800/40 rounded-md bg-slate-900/20">
+                            ยังไม่มีสัญญาณประเภทนี้
                           </div>
-                          {mainBoardSignals.map((sig, idx) => (
-                            <StockSignalCard key={`main-${sig.symbol}`} signal={sig} rank={idx + 1}
-                              isExpanded={expandedIdx === `main-${idx}`} onToggle={() => handleToggle(`main-${idx}`)} apiUrl={API_URL} />
-                          ))}
-                        </div>
-                      )}
-                      {moneyFlowSignals.length > 0 && (
-                        <div>
-                          <div className="mb-3 flex items-center gap-2">
-                            <span className="text-xl">💸</span>
-                            <span className="text-slate-400 text-sm font-medium">Money Flow</span>
-                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{moneyFlowSignals.length}</span>
-                          </div>
-                          {moneyFlowSignals.map((sig, idx) => (
-                            <StockSignalCard key={`money-${sig.symbol}`} signal={sig} rank={idx + 1}
-                              isExpanded={expandedIdx === `money-${idx}`} onToggle={() => handleToggle(`money-${idx}`)} apiUrl={API_URL} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        ) : signals.map((sig, idx) => (
+                          <StockSignalCard key={`${key}-${sig.symbol}`} signal={sig} rank={idx + 1}
+                            isExpanded={expandedIdx === `${key}-${idx}`} onToggle={() => handleToggle(`${key}-${idx}`)} apiUrl={API_URL} />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </PullToRefresh>
               ) : (
                 <div className="grid grid-cols-2 gap-4 items-start">
-                  {/* คอลัมน์ซ้าย: Main Board */}
+                  {/* คอลัมน์ซ้าย: Opening Vol + Gap Up */}
                   <div className="flex flex-col gap-4">
-                    {mainBoardSignals.length > 0 && (
-                      <StockSignalTable title="Main Board — Top 10" icon="🔥" signals={mainBoardSignals} breakpoint={breakpoint} apiUrl={API_URL} />
-                    )}
+                    <StockSignalTable title="Opening Vol" icon="🌅" signals={openingSignals} breakpoint={breakpoint} apiUrl={API_URL} />
+                    <StockSignalTable title="Gap Up + Vol" icon="📈" signals={gapUpSignals} breakpoint={breakpoint} apiUrl={API_URL} />
                   </div>
-                  {/* คอลัมน์ขวา: Spikes + Money Flow */}
+                  {/* คอลัมน์ขวา: Intraday Spike + Money Flow */}
                   <div className="flex flex-col gap-4">
-                    {spikeSignals.length > 0 && (
-                      <StockSignalTable title="Top Spikes (Actionable)" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} apiUrl={API_URL} />
-                    )}
-                    {moneyFlowSignals.length > 0 && (
-                      <StockSignalTable title="Money Flow Leaderboard" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} apiUrl={API_URL} />
-                    )}
+                    <StockSignalTable title="Intraday Spike" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} apiUrl={API_URL} />
+                    <StockSignalTable title="Money Flow" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} apiUrl={API_URL} />
                   </div>
                 </div>
               )}
