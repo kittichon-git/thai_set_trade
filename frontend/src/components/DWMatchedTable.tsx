@@ -57,7 +57,11 @@ const DWMatchedTable = memo(({ dwList, selectedSymbol, apiUrl }: Props) => {
 
   const handleConfirm = async (dw: DWItem) => {
     const volume = parseFloat(buyState?.qty ?? '0');
-    if (!volume || volume <= 0) return;
+    if (!volume || volume <= 0 || volume % 100 !== 0) {
+      setBuyResult({ dw_code: dw.dw_code, ok: false, msg: 'จำนวนต้องเป็นทวีคูณของ 100' });
+      setBuyState(null);
+      return;
+    }
     setBuyResult(null);
     try {
       const res = await fetch(`${apiUrl}/trade/buy`, {
@@ -153,12 +157,15 @@ const DWMatchedTable = memo(({ dwList, selectedSymbol, apiUrl }: Props) => {
                       <div className="flex items-center gap-1 justify-center">
                         <input
                           type="number"
-                          min="1"
+                          min="100"
+                          step="100"
+                          placeholder="100"
                           value={buyState.qty}
                           onChange={(e) => setBuyState({ ...buyState, qty: e.target.value })}
                           onClick={(e) => e.stopPropagation()}
-                          className="w-16 text-xs bg-slate-700 border border-slate-600 text-slate-100 rounded px-1.5 py-1 num text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          className="w-20 text-xs bg-slate-700 border border-slate-600 text-slate-100 rounded px-1.5 py-1 num text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
+                        <span className="text-[10px] text-slate-500">หุ้น</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleConfirm(dw); }}
                           className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition-colors font-medium"
