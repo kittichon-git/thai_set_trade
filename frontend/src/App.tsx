@@ -328,16 +328,22 @@ export default function App() {
                   )}
                 </PullToRefresh>
               ) : (
-                <div className="flex flex-col gap-4">
-                  {spikeSignals.length > 0 && (
-                    <StockSignalTable title="Top Spikes (Actionable)" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} />
-                  )}
-                  {mainBoardSignals.length > 0 && (
-                    <StockSignalTable title="Main Board — Top 10" icon="🔥" signals={mainBoardSignals} breakpoint={breakpoint} />
-                  )}
-                  {moneyFlowSignals.length > 0 && (
-                    <StockSignalTable title="Money Flow Leaderboard" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} />
-                  )}
+                <div className="grid grid-cols-2 gap-4 items-start">
+                  {/* คอลัมน์ซ้าย: Main Board */}
+                  <div className="flex flex-col gap-4">
+                    {mainBoardSignals.length > 0 && (
+                      <StockSignalTable title="Main Board — Top 10" icon="🔥" signals={mainBoardSignals} breakpoint={breakpoint} />
+                    )}
+                  </div>
+                  {/* คอลัมน์ขวา: Spikes + Money Flow */}
+                  <div className="flex flex-col gap-4">
+                    {spikeSignals.length > 0 && (
+                      <StockSignalTable title="Top Spikes (Actionable)" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} />
+                    )}
+                    {moneyFlowSignals.length > 0 && (
+                      <StockSignalTable title="Money Flow Leaderboard" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} />
+                    )}
+                  </div>
                 </div>
               )}
 
