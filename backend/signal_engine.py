@@ -20,9 +20,11 @@ GAP_UP_THRESHOLD     = 0.5   # Gap % threshold
 SPIKE_THRESHOLD      = 3.0   # 15m vol > 3x prev 60m avg
 MONEY_FLOW_TOP_N     = 5     # Top 5 by money flow share
 
-# Late Surge thresholds (dynamic by time of day)
-LATE_SURGE_MIN_PERIODS = 6   # ต้องมี M5 data อย่างน้อย 6 periods = 30 นาที
-LATE_SURGE_MIN_M5_VOL  = 5000  # volume ขั้นต่ำต่อ 5 นาที (กรอง noise)
+# Late Surge thresholds (M1-based, dynamic by time of day)
+LATE_SURGE_AVG_LOOKBACK  = 30   # ใช้ M1 ย้อนหลัง 30 นาทีคำนวณ avg
+LATE_SURGE_MIN_PERIODS   = 10   # ต้องมี M1 data อย่างน้อย 10 นาที
+LATE_SURGE_MIN_M1_VOL    = 2000 # volume ขั้นต่ำต่อ M1 (กรอง noise tick)
+LATE_SURGE_PREV_CONFIRM  = 0.3  # vol_m1_prev ต้องอย่างน้อย 30% ของ MIN_M1_VOL
 
 def _late_surge_threshold(t: time) -> float:
     """Threshold ลดลงช่วงบ่าย เพราะ volume เบากว่าเช้า."""
@@ -191,23 +193,31 @@ def compute_all_signals() -> list[StockSignal]:
                 sig_val = gap_pct + gap_ratio
                 GAP_UP_FIRED_TODAY.add(symbol)
 
-        # 3. Late Surge — M5 volume burst เทียบกับ avg M5 ช่วง 1 ชม.ที่ผ่านมา
+        # 3. Late Surge — M1 volume burst เทียบกับ avg M1 ย้อนหลัง 30 นาที
         if sig_type is None and now_time >= time(10, 30):
-            vol_m5_now = today_vol - get_past_cum_vol(symbol, curr_min - timedelta(minutes=5))
+            # Volume นาทีปัจจุบัน
+            vol_m1_now  = today_vol - get_past_cum_vol(symbol, curr_min - timedelta(minutes=1))
+            # Volume นาทีก่อนหน้า (ใช้ยืนยันความต่อเนื่อง)
+            vol_m1_prev = (get_past_cum_vol(symbol, curr_min - timedelta(minutes=1))
+                           - get_past_cum_vol(symbol, curr_min - timedelta(minutes=2)))
 
-            # คำนวณ avg M5 จาก 12 periods ย้อนหลัง (= 1 ชม.)
-            m5_vols: list[int] = []
-            for n in range(1, 13):
-                v_end   = get_past_cum_vol(symbol, curr_min - timedelta(minutes=n * 5))
-                v_start = get_past_cum_vol(symbol, curr_min - timedelta(minutes=(n + 1) * 5))
+            # คำนวณ avg M1 จาก LATE_SURGE_AVG_LOOKBACK นาทีย้อนหลัง
+            m1_vols: list[int] = []
+            for n in range(2, LATE_SURGE_AVG_LOOKBACK + 2):   # เริ่มจาก -2 min เพื่อไม่นับนาทีปัจจุบัน
+                v_end   = get_past_cum_vol(symbol, curr_min - timedelta(minutes=n))
+                v_start = get_past_cum_vol(symbol, curr_min - timedelta(minutes=n + 1))
                 pv = v_end - v_start
                 if pv >= 0:
-                    m5_vols.append(pv)
+                    m1_vols.append(pv)
 
-            if len(m5_vols) >= LATE_SURGE_MIN_PERIODS and vol_m5_now >= LATE_SURGE_MIN_M5_VOL:
-                avg_m5 = sum(m5_vols) / len(m5_vols)
-                if avg_m5 > 0:
-                    surge_ratio = vol_m5_now / avg_m5
+            min_prev_vol = int(LATE_SURGE_MIN_M1_VOL * LATE_SURGE_PREV_CONFIRM)
+
+            if (len(m1_vols) >= LATE_SURGE_MIN_PERIODS
+                    and vol_m1_now  >= LATE_SURGE_MIN_M1_VOL
+                    and vol_m1_prev >= min_prev_vol):
+                avg_m1 = sum(m1_vols) / len(m1_vols)
+                if avg_m1 > 0:
+                    surge_ratio = vol_m1_now / avg_m1
                     if surge_ratio >= _late_surge_threshold(now_time):
                         sig_type = "Late Surge"
                         sig_val  = surge_ratio
