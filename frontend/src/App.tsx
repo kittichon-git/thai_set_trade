@@ -182,7 +182,7 @@ export default function App() {
             <button
               key={id}
               onClick={() => { setActiveTab(id as Tab); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all mb-0.5 ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all mb-0.5 ${
                 activeTab === id
                   ? 'bg-emerald-500/15 text-emerald-400 font-medium shadow-sm'
                   : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
@@ -191,9 +191,9 @@ export default function App() {
               <span className="text-base leading-none">{icon}</span>
               <span>{label}</span>
               {id === 'dw-universe' && payload?.dw_universe_count ? (
-                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full num">{payload.dw_universe_count}</span>
+                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded num">{payload.dw_universe_count}</span>
               ) : id === 'dw-all' && payload?.dw_all_count ? (
-                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full num">{payload.dw_all_count}</span>
+                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded num">{payload.dw_all_count}</span>
               ) : null}
             </button>
           ))}
@@ -245,12 +245,12 @@ export default function App() {
               <span className="text-xs text-slate-500 hidden sm:block">{payload.timestamp}</span>
             )}
             {payload?.signal_count != null && (
-              <span className="text-xs bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium">
+              <span className="text-xs bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded border border-emerald-500/20 font-medium">
                 {payload.signal_count} สัญญาณ
               </span>
             )}
             {status !== 'connected' && (
-              <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+              <span className={`text-xs px-2.5 py-1 rounded border font-medium ${
                 status === 'connecting'
                   ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
                   : 'bg-red-500/15 text-red-400 border-red-500/20'
@@ -290,11 +290,11 @@ export default function App() {
                           <div className="mb-3 flex items-center gap-2">
                             <span className="text-xl">⚡</span>
                             <span className="text-slate-400 text-sm font-medium">Top Spikes</span>
-                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">{spikeSignals.length}</span>
+                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{spikeSignals.length}</span>
                           </div>
                           {spikeSignals.map((sig, idx) => (
                             <StockSignalCard key={`spike-${sig.symbol}`} signal={sig} rank={idx + 1}
-                              isExpanded={expandedIdx === `spike-${idx}`} onToggle={() => handleToggle(`spike-${idx}`)} />
+                              isExpanded={expandedIdx === `spike-${idx}`} onToggle={() => handleToggle(`spike-${idx}`)} apiUrl={API_URL} />
                           ))}
                         </div>
                       )}
@@ -303,11 +303,11 @@ export default function App() {
                           <div className="mb-3 flex items-center gap-2">
                             <span className="text-xl">🔥</span>
                             <span className="text-slate-400 text-sm font-medium">Main Board — Top 10</span>
-                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">{mainBoardSignals.length}</span>
+                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{mainBoardSignals.length}</span>
                           </div>
                           {mainBoardSignals.map((sig, idx) => (
                             <StockSignalCard key={`main-${sig.symbol}`} signal={sig} rank={idx + 1}
-                              isExpanded={expandedIdx === `main-${idx}`} onToggle={() => handleToggle(`main-${idx}`)} />
+                              isExpanded={expandedIdx === `main-${idx}`} onToggle={() => handleToggle(`main-${idx}`)} apiUrl={API_URL} />
                           ))}
                         </div>
                       )}
@@ -316,11 +316,11 @@ export default function App() {
                           <div className="mb-3 flex items-center gap-2">
                             <span className="text-xl">💸</span>
                             <span className="text-slate-400 text-sm font-medium">Money Flow</span>
-                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">{moneyFlowSignals.length}</span>
+                            <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">{moneyFlowSignals.length}</span>
                           </div>
                           {moneyFlowSignals.map((sig, idx) => (
                             <StockSignalCard key={`money-${sig.symbol}`} signal={sig} rank={idx + 1}
-                              isExpanded={expandedIdx === `money-${idx}`} onToggle={() => handleToggle(`money-${idx}`)} />
+                              isExpanded={expandedIdx === `money-${idx}`} onToggle={() => handleToggle(`money-${idx}`)} apiUrl={API_URL} />
                           ))}
                         </div>
                       )}

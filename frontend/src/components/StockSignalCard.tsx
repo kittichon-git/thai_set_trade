@@ -14,9 +14,10 @@ interface Props {
   rank: number;
   isExpanded: boolean;
   onToggle: () => void;
+  apiUrl: string;
 }
 
-const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle }: Props) => {
+const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle, apiUrl }: Props) => {
   const borderColor =
     signal.strength === 'High' || signal.volume_ratio >= 5.0
       ? 'border-red-500'
@@ -27,7 +28,7 @@ const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle }: Props) => 
 
   return (
     <div
-      className={`mb-3 rounded-xl bg-slate-900/70 border border-slate-800/60 border-l-4 ${borderColor} overflow-hidden`}
+      className={`mb-3 rounded-md bg-slate-900/70 border border-slate-800/60 border-l-4 ${borderColor} overflow-hidden`}
     >
       {/* Card header — tap to expand/collapse */}
       <button
@@ -129,7 +130,7 @@ const StockSignalCard = memo(({ signal, rank, isExpanded, onToggle }: Props) => 
               <div className="text-xs text-slate-500 mb-2 font-medium">
                 📋 DW Call — {signal.symbol} ({signal.dw_list.length} รายการ)
               </div>
-              <DWMatchedCard dwList={signal.dw_list} />
+              <DWMatchedCard dwList={signal.dw_list} apiUrl={apiUrl} />
             </div>
           </motion.div>
         )}

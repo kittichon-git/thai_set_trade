@@ -8,7 +8,7 @@ interface Props {
 
 const VolumeRatioBadge = memo(({ ratio, strength }: Props) => {
   const baseClasses =
-    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold num touch-target justify-center select-none';
+    'inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold num touch-target justify-center select-none';
 
   if (ratio >= 5.0 || strength === 'High') {
     return (

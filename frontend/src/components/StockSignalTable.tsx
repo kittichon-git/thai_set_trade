@@ -197,12 +197,12 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiU
       <div className="mb-3 flex items-center gap-2">
         <span className="text-xl">{icon}</span>
         <span className="text-slate-400 text-sm font-medium">{title}</span>
-        <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full num">
+        <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">
           {signals.length}
         </span>
       </div>
 
-      <div className="table-scroll rounded-xl border border-slate-800/60 bg-slate-900/40">
+      <div className="table-scroll rounded-md border border-slate-800/60 bg-slate-900/40">
         <table className="w-full">
           <thead>
             <tr className="bg-slate-800/60">

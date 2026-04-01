@@ -65,12 +65,12 @@ const SignalHistory = memo(({ apiUrl }: Props) => {
         >
           <span className="font-semibold text-sm">📊 ประวัติสัญญาณวันนี้</span>
           {records.length > 0 && (
-            <span className="bg-emerald-900/60 text-emerald-300 text-xs px-2 py-0.5 rounded-full num border border-emerald-800/50">
+            <span className="bg-emerald-900/60 text-emerald-300 text-xs px-2 py-0.5 rounded num border border-emerald-800/50">
               {records.length} หุ้น
             </span>
           )}
           {marketWideCount > 0 && (
-            <span className="bg-amber-900/60 text-amber-300 text-xs px-2 py-0.5 rounded-full border border-amber-800/50">
+            <span className="bg-amber-900/60 text-amber-300 text-xs px-2 py-0.5 rounded border border-amber-800/50">
               ⚠ ตลาดร้อน
             </span>
           )}
@@ -157,7 +157,7 @@ const SignalHistory = memo(({ apiUrl }: Props) => {
 
                       {/* Pulse count */}
                       {rec.pulses.length > 1 && (
-                        <span className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full num">
+                        <span className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded num">
                           {rec.pulses.length} ครั้ง
                         </span>
                       )}
