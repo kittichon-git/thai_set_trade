@@ -63,7 +63,19 @@ def load_log() -> None:
                 dt = TZ.localize(datetime.strptime(f"{record.date} {last_time}", "%Y-%m-%d %H:%M:%S"))
                 _last_pulse[record.symbol] = dt
         _today_signals = loaded
-        logger.info(f"Loaded {len(_today_signals)} signals for today from Supabase")
+
+        # Restore fired-today sets ใน signal_engine เพื่อไม่ยิงซ้ำหลัง restart
+        import signal_engine as _se
+        for record in loaded.values():
+            pulse_types = {p.signal_type for p in record.pulses}
+            if "Gap Up + Vol" in pulse_types:
+                _se.GAP_UP_FIRED_TODAY.add(record.symbol)
+            if "Opening Vol" in pulse_types:
+                _se.OPENING_VOL_FIRED_TODAY.add(record.symbol)
+        logger.info(
+            "Loaded %d signals | GapUp fired restored: %d | Opening fired restored: %d",
+            len(_today_signals), len(_se.GAP_UP_FIRED_TODAY), len(_se.OPENING_VOL_FIRED_TODAY),
+        )
     except Exception as e:
         logger.error(f"Failed to load signal log from Supabase: {e}")
 
