@@ -8,13 +8,12 @@ import StockSignalTable from './components/StockSignalTable';
 import StockSignalCard from './components/StockSignalCard';
 import SignalHistory from './components/SignalHistory';
 import PullToRefresh from './components/PullToRefresh';
-import DWUniversePage from './components/DWUniversePage';
 import type { StockSignal } from './types';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/dashboard';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-type Tab = 'dashboard' | 'history' | 'dw-universe' | 'dw-all';
+type Tab = 'dashboard' | 'history';
 
 const MOCK_SIGNALS: StockSignal[] = [
   {
@@ -125,10 +124,8 @@ const MOCK_SIGNALS: StockSignal[] = [
 ];
 
 const NAV_ITEMS = [
-  { id: 'dashboard',    icon: '📊', label: 'Dashboard' },
-  { id: 'history',      icon: '🕐', label: 'ประวัติสัญญาณ' },
-  { id: 'dw-universe',  icon: '📋', label: 'DW Universe' },
-  { id: 'dw-all',       icon: '📂', label: 'DW ทั้งหมด' },
+  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+  { id: 'history',   icon: '🕐', label: 'ประวัติสัญญาณ' },
 ] as const;
 
 export default function App() {
@@ -190,11 +187,6 @@ export default function App() {
             >
               <span className="text-base leading-none">{icon}</span>
               <span>{label}</span>
-              {id === 'dw-universe' && payload?.dw_universe_count ? (
-                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded num">{payload.dw_universe_count}</span>
-              ) : id === 'dw-all' && payload?.dw_all_count ? (
-                <span className="ml-auto text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded num">{payload.dw_all_count}</span>
-              ) : null}
             </button>
           ))}
         </nav>
@@ -263,11 +255,7 @@ export default function App() {
 
         {/* Page content */}
         <main className="flex-1 p-4">
-          {activeTab === 'dw-universe' ? (
-            <DWUniversePage apiUrl={API_URL} endpoint="/dw-universe" title="DW Universe (Filtered)" />
-          ) : activeTab === 'dw-all' ? (
-            <DWUniversePage apiUrl={API_URL} endpoint="/dw-all" title="DW ทั้งหมด" />
-          ) : activeTab === 'history' ? (
+          {activeTab === 'history' ? (
             <SignalHistory apiUrl={API_URL} />
           ) : (
             /* Dashboard */
@@ -306,23 +294,17 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4 items-start">
                   {/* คอลัมน์ซ้าย: Opening Vol + Gap Up */}
                   <div className="flex flex-col gap-4">
-                    <StockSignalTable title="Opening Vol" icon="🌅" signals={openingSignals} breakpoint={breakpoint} apiUrl={API_URL} />
-                    <StockSignalTable title="Gap Up + Vol" icon="📈" signals={gapUpSignals} breakpoint={breakpoint} apiUrl={API_URL} />
+                    <StockSignalTable title="Opening Vol" icon="🌅" signals={openingSignals} breakpoint={breakpoint} apiUrl={API_URL} color="amber" />
+                    <StockSignalTable title="Gap Up + Vol" icon="📈" signals={gapUpSignals} breakpoint={breakpoint} apiUrl={API_URL} color="emerald" />
                   </div>
                   {/* คอลัมน์ขวา: Intraday Spike + Money Flow */}
                   <div className="flex flex-col gap-4">
-                    <StockSignalTable title="Intraday Spike" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} apiUrl={API_URL} />
-                    <StockSignalTable title="Money Flow" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} apiUrl={API_URL} />
+                    <StockSignalTable title="Intraday Spike" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} apiUrl={API_URL} color="yellow" />
+                    <StockSignalTable title="Money Flow" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} apiUrl={API_URL} color="blue" />
                   </div>
                 </div>
               )}
 
-              {/* Signal history ใต้ dashboard (desktop เท่านั้น) */}
-              {!isMobile && (
-                <div className="mt-6 border-t border-slate-800/60 pt-6">
-                  <SignalHistory apiUrl={API_URL} />
-                </div>
-              )}
             </>
           )}
         </main>

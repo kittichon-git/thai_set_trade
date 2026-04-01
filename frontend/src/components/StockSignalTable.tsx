@@ -14,6 +14,7 @@ interface Props {
   signals: StockSignal[];
   breakpoint: 'mobile' | 'tablet' | 'desktop';
   apiUrl: string;
+  color?: 'amber' | 'emerald' | 'yellow' | 'blue';
 }
 
 interface RowProps {
@@ -128,7 +129,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
         <tr>
           <td
             colSpan={isDesktop ? 7 : 6}
-            className="bg-slate-900/60 px-4 py-4 border-t border-slate-700/40 slide-down"
+            className="bg-[#0a0f1a] px-4 py-4 border-t-2 border-b-2 border-slate-600/60 slide-down shadow-inner"
           >
             {/* Price chart */}
             {ohlc.length >= 1 ? (
@@ -173,7 +174,14 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
 
 SignalRow.displayName = 'SignalRow';
 
-const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiUrl }: Props) => {
+const COLOR_MAP = {
+  amber:   { bar: 'bg-amber-500',   text: 'text-amber-300',   badge: 'bg-amber-900/50 text-amber-300 border border-amber-700/40', thead: 'bg-amber-950/40 border-b border-amber-800/30' },
+  emerald: { bar: 'bg-emerald-500', text: 'text-emerald-300', badge: 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/40', thead: 'bg-emerald-950/40 border-b border-emerald-800/30' },
+  yellow:  { bar: 'bg-yellow-400',  text: 'text-yellow-300',  badge: 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/40', thead: 'bg-yellow-950/40 border-b border-yellow-800/30' },
+  blue:    { bar: 'bg-blue-500',    text: 'text-blue-300',    badge: 'bg-blue-900/50 text-blue-300 border border-blue-700/40', thead: 'bg-blue-950/40 border-b border-blue-800/30' },
+};
+
+const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiUrl, color = 'amber' }: Props) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const handleToggle = useCallback((idx: number) => {
@@ -181,13 +189,15 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiU
   }, []);
 
   const isDesktop = breakpoint === 'desktop';
+  const c = COLOR_MAP[color];
 
   return (
     <div className="fade-in mb-4">
       <div className="mb-3 flex items-center gap-2">
+        <span className={`w-1 h-5 rounded-full ${c.bar} flex-shrink-0`} />
         <span className="text-xl">{icon}</span>
-        <span className="text-slate-400 text-sm font-medium">{title}</span>
-        <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded num">
+        <span className={`text-sm font-semibold ${c.text}`}>{title}</span>
+        <span className={`text-xs px-2 py-0.5 rounded num ${c.badge}`}>
           {signals.length}
         </span>
       </div>
@@ -201,7 +211,7 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiU
       <div className="table-scroll rounded-md border border-slate-800/60 bg-slate-900/40">
         <table className="w-full">
           <thead>
-            <tr className="bg-slate-800/60">
+            <tr className={c.thead}>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-3 w-8">
                 #
               </th>
