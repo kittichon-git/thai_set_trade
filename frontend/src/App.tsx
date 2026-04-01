@@ -132,7 +132,7 @@ const NAV_ITEMS = [
 ] as const;
 
 export default function App() {
-  const { payload, status, lastUpdate, forceReconnect } = useWebSocket(WS_URL);
+  const { payload, status, forceReconnect } = useWebSocket(WS_URL);
   const breakpoint = useBreakpoint();
   const [expandedIdx, setExpandedIdx] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
