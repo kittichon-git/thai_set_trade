@@ -332,16 +332,16 @@ export default function App() {
                   {/* คอลัมน์ซ้าย: Main Board */}
                   <div className="flex flex-col gap-4">
                     {mainBoardSignals.length > 0 && (
-                      <StockSignalTable title="Main Board — Top 10" icon="🔥" signals={mainBoardSignals} breakpoint={breakpoint} />
+                      <StockSignalTable title="Main Board — Top 10" icon="🔥" signals={mainBoardSignals} breakpoint={breakpoint} apiUrl={API_URL} />
                     )}
                   </div>
                   {/* คอลัมน์ขวา: Spikes + Money Flow */}
                   <div className="flex flex-col gap-4">
                     {spikeSignals.length > 0 && (
-                      <StockSignalTable title="Top Spikes (Actionable)" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} />
+                      <StockSignalTable title="Top Spikes (Actionable)" icon="⚡" signals={spikeSignals} breakpoint={breakpoint} apiUrl={API_URL} />
                     )}
                     {moneyFlowSignals.length > 0 && (
-                      <StockSignalTable title="Money Flow Leaderboard" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} />
+                      <StockSignalTable title="Money Flow Leaderboard" icon="💸" signals={moneyFlowSignals} breakpoint={breakpoint} apiUrl={API_URL} />
                     )}
                   </div>
                 </div>

@@ -13,6 +13,7 @@ interface Props {
   icon?: string;
   signals: StockSignal[];
   breakpoint: 'mobile' | 'tablet' | 'desktop';
+  apiUrl: string;
 }
 
 interface RowProps {
@@ -22,9 +23,10 @@ interface RowProps {
   onToggle: () => void;
   breakpoint: 'mobile' | 'tablet' | 'desktop';
   prevRatio?: number;
+  apiUrl: string;
 }
 
-const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRatio }: RowProps) => {
+const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRatio, apiUrl }: RowProps) => {
   const [flashClass, setFlashClass] = useState('');
   const prevRatioRef = useRef(prevRatio);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -79,9 +81,6 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
                   </span>
                 )}
               </div>
-              <div className="text-xs text-slate-500 num">
-                {signal.dw_list.length} DW
-              </div>
             </div>
           </div>
         </td>
@@ -118,25 +117,9 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
           <VolumeRatioBadge ratio={signal.volume_ratio} strength={signal.strength} />
         </td>
 
-        {/* Sparkline */}
-        <td className="py-3 px-2 text-center">
-          <Sparkline data={signal.sparkline} width={48} height={20} />
-        </td>
-
-        {/* DW count + expand toggle */}
+        {/* Expand indicator */}
         <td className="py-3 px-3 text-right">
-          <button
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 ml-auto"
-            onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            aria-label={isExpanded ? 'Collapse DW list' : 'Expand DW list'}
-          >
-            <span>DW {signal.dw_list.length}</span>
-            <span
-              className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-            >
-              ▾
-            </span>
-          </button>
+          <span className={`text-slate-500 text-xs transition-transform duration-200 inline-block ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
         </td>
       </tr>
 
@@ -144,7 +127,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
       {isExpanded && (
         <tr>
           <td
-            colSpan={isDesktop ? 9 : 8}
+            colSpan={isDesktop ? 7 : 6}
             className="bg-slate-900/60 px-4 py-4 border-t border-slate-700/40 slide-down"
           >
             {/* Price chart */}
@@ -180,7 +163,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
               📋 DW Call ที่เข้าเงื่อนไข — {signal.symbol}
               <span className="ml-2 text-slate-600">({signal.dw_list.length} รายการ เรียงตาม Volume)</span>
             </div>
-            <DWMatchedTable dwList={signal.dw_list} selectedSymbol={signal.symbol} />
+            <DWMatchedTable dwList={signal.dw_list} selectedSymbol={signal.symbol} apiUrl={apiUrl} />
           </td>
         </tr>
       )}
@@ -190,7 +173,7 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
 
 SignalRow.displayName = 'SignalRow';
 
-const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint }: Props) => {
+const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiUrl }: Props) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const handleToggle = useCallback((idx: number) => {
@@ -246,12 +229,7 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint }: Pr
               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-2">
                 อัตรา
               </th>
-              <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-2">
-                Spark
-              </th>
-              <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-3">
-                DW
-              </th>
+              <th className="py-3 px-3 w-6" />
             </tr>
           </thead>
           <tbody>
@@ -263,6 +241,7 @@ const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint }: Pr
                 isExpanded={expandedIdx === idx}
                 onToggle={() => handleToggle(idx)}
                 breakpoint={breakpoint}
+                apiUrl={apiUrl}
               />
             ))}
           </tbody>

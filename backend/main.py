@@ -12,6 +12,7 @@ from datetime import datetime
 import pytz
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from models import DashboardPayload, WSMessage, StockSignal
 from dw_scraper import scrape_dw_universe, scrape_dw_universe_playwright, DW_UNIVERSE, DW_ALL_COLLECTED
@@ -456,3 +457,18 @@ def signals_history(date: str | None = None):
         "records": [r.model_dump() for r in records],
         "available_dates": dates,
     }
+
+
+# ---------------------------------------------------------------------------
+# MT5 Trade endpoint
+# ---------------------------------------------------------------------------
+class BuyOrderRequest(BaseModel):
+    dw_code: str
+    volume: float  # MT5 lots
+
+
+@app.post("/trade/buy")
+def trade_buy(req: BuyOrderRequest):
+    """Send a market BUY order via MT5. volume = number of lots."""
+    from mt5_trader import send_buy_order
+    return send_buy_order(req.dw_code, req.volume)
