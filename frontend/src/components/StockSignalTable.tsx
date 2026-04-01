@@ -14,7 +14,7 @@ interface Props {
   signals: StockSignal[];
   breakpoint: 'mobile' | 'tablet' | 'desktop';
   apiUrl: string;
-  color?: 'amber' | 'emerald' | 'yellow' | 'blue';
+  color?: 'amber' | 'emerald' | 'yellow' | 'blue' | 'violet';
 }
 
 interface RowProps {
@@ -175,13 +175,14 @@ const SignalRow = memo(({ signal, rank, isExpanded, onToggle, breakpoint, prevRa
 SignalRow.displayName = 'SignalRow';
 
 const COLOR_MAP = {
-  amber:   { bar: 'bg-amber-500',   text: 'text-amber-300',   badge: 'bg-amber-900/50 text-amber-300 border border-amber-700/40', thead: 'bg-amber-950/40 border-b border-amber-800/30' },
+  amber:   { bar: 'bg-amber-500',   text: 'text-amber-300',   badge: 'bg-amber-900/50 text-amber-300 border border-amber-700/40',   thead: 'bg-amber-950/40 border-b border-amber-800/30' },
   emerald: { bar: 'bg-emerald-500', text: 'text-emerald-300', badge: 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/40', thead: 'bg-emerald-950/40 border-b border-emerald-800/30' },
-  yellow:  { bar: 'bg-yellow-400',  text: 'text-yellow-300',  badge: 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/40', thead: 'bg-yellow-950/40 border-b border-yellow-800/30' },
-  blue:    { bar: 'bg-blue-500',    text: 'text-blue-300',    badge: 'bg-blue-900/50 text-blue-300 border border-blue-700/40', thead: 'bg-blue-950/40 border-b border-blue-800/30' },
+  yellow:  { bar: 'bg-yellow-400',  text: 'text-yellow-300',  badge: 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/40',  thead: 'bg-yellow-950/40 border-b border-yellow-800/30' },
+  blue:    { bar: 'bg-blue-500',    text: 'text-blue-300',    badge: 'bg-blue-900/50 text-blue-300 border border-blue-700/40',    thead: 'bg-blue-950/40 border-b border-blue-800/30' },
+  violet:  { bar: 'bg-violet-500',  text: 'text-violet-300',  badge: 'bg-violet-900/50 text-violet-300 border border-violet-700/40',  thead: 'bg-violet-950/40 border-b border-violet-800/30' },
 };
 
-const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiUrl, color = 'amber' }: Props) => {
+const StockSignalTable = memo(({ title, icon = '🔥', signals, breakpoint, apiUrl, color = 'amber' }: Props & { color?: keyof typeof COLOR_MAP }) => {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const handleToggle = useCallback((idx: number) => {

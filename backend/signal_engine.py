@@ -20,6 +20,19 @@ GAP_UP_THRESHOLD     = 0.5   # Gap % threshold
 SPIKE_THRESHOLD      = 3.0   # 15m vol > 3x prev 60m avg
 MONEY_FLOW_TOP_N     = 5     # Top 5 by money flow share
 
+# Late Surge thresholds (dynamic by time of day)
+LATE_SURGE_MIN_PERIODS = 6   # ต้องมี M5 data อย่างน้อย 6 periods = 30 นาที
+LATE_SURGE_MIN_M5_VOL  = 5000  # volume ขั้นต่ำต่อ 5 นาที (กรอง noise)
+
+def _late_surge_threshold(t: time) -> float:
+    """Threshold ลดลงช่วงบ่าย เพราะ volume เบากว่าเช้า."""
+    if t < time(11, 30):
+        return 4.0   # เช้า — volume ปกติสูง ต้องเกณฑ์สูง
+    elif t < time(14, 30):
+        return 3.0   # กลางวัน
+    else:
+        return 2.5   # บ่าย — burst เล็กก็มีนัย
+
 # State Storage
 YESTERDAY_OPENING_CUM: dict[str, dict[int, int]] = {}  # sym -> {minute_offset: cum_vol}
 INTRADAY_CUM_VOL: dict[str, dict[datetime, int]] = {}
@@ -87,11 +100,12 @@ def get_past_cum_vol(sym: str, target_min: datetime) -> int:
 
 def compute_all_signals() -> list[StockSignal]:
     """
-    Core engine loop. Computes the 4 advanced signals:
+    Core engine loop. Computes the 5 advanced signals:
     1. Opening Vol Anomaly (Today vs Yesterday)
     2. Gap Up + Volume
-    3. Intraday Volume Spike (15m vs 60m avg)
-    4. Market Money Flow Share (Top 50)
+    3. Late Surge (M5 burst vs rolling avg — all day)
+    4. Intraday Volume Spike (15m vs 60m avg)
+    5. Market Money Flow Share (Top 50)
     """
     provider = get_provider()
     symbols = list(DW_UNIVERSE.keys())
@@ -177,14 +191,36 @@ def compute_all_signals() -> list[StockSignal]:
                 sig_val = gap_pct + gap_ratio
                 GAP_UP_FIRED_TODAY.add(symbol)
 
-        # 3. Intraday Volume Spike
+        # 3. Late Surge — M5 volume burst เทียบกับ avg M5 ช่วง 1 ชม.ที่ผ่านมา
+        if sig_type is None and now_time >= time(10, 30):
+            vol_m5_now = today_vol - get_past_cum_vol(symbol, curr_min - timedelta(minutes=5))
+
+            # คำนวณ avg M5 จาก 12 periods ย้อนหลัง (= 1 ชม.)
+            m5_vols: list[int] = []
+            for n in range(1, 13):
+                v_end   = get_past_cum_vol(symbol, curr_min - timedelta(minutes=n * 5))
+                v_start = get_past_cum_vol(symbol, curr_min - timedelta(minutes=(n + 1) * 5))
+                pv = v_end - v_start
+                if pv >= 0:
+                    m5_vols.append(pv)
+
+            if len(m5_vols) >= LATE_SURGE_MIN_PERIODS and vol_m5_now >= LATE_SURGE_MIN_M5_VOL:
+                avg_m5 = sum(m5_vols) / len(m5_vols)
+                if avg_m5 > 0:
+                    surge_ratio = vol_m5_now / avg_m5
+                    if surge_ratio >= _late_surge_threshold(now_time):
+                        sig_type = "Late Surge"
+                        sig_val  = surge_ratio
+                        ratio    = surge_ratio
+
+        # 4. Intraday Volume Spike
         if sig_type is None and now_time > time(10, 15):
             vol_15m_ago = get_past_cum_vol(symbol, curr_min - timedelta(minutes=15))
             vol_75m_ago = get_past_cum_vol(symbol, curr_min - timedelta(minutes=75))
-            
+
             vol_last_15 = today_vol - vol_15m_ago
             vol_prev_60 = vol_15m_ago - vol_75m_ago
-            
+
             if vol_prev_60 > 0:
                 spike_ratio = vol_last_15 / vol_prev_60
                 if spike_ratio >= SPIKE_THRESHOLD:
@@ -192,7 +228,7 @@ def compute_all_signals() -> list[StockSignal]:
                     sig_val = spike_ratio
                     ratio = spike_ratio
         
-        # 4. Money Flow Top 5 (runs all day — top 5 by share of total watchlist value)
+        # 5. Money Flow Top 5 (runs all day — top 5 by share of total watchlist value)
         if not sig_type and rank <= MONEY_FLOW_TOP_N:
             sig_type = f"Money Flow #{rank}"
             sig_val = share * 100   # e.g. 2.5 for 2.5%

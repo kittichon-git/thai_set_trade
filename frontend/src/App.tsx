@@ -142,10 +142,11 @@ export default function App() {
   const isMobile = breakpoint === 'mobile';
 
   const activeSignals = payload?.signals && payload.signals.length > 0 ? payload.signals : MOCK_SIGNALS;
-  const openingSignals   = activeSignals.filter(s => s.signal_type === 'Opening Vol');
-  const gapUpSignals     = activeSignals.filter(s => s.signal_type === 'Gap Up + Vol');
-  const spikeSignals     = activeSignals.filter(s => s.signal_type === 'Intraday Spike');
-  const moneyFlowSignals = activeSignals.filter(s => s.signal_type?.includes('Money Flow')).slice(0, 5);
+  const openingSignals    = activeSignals.filter(s => s.signal_type === 'Opening Vol');
+  const gapUpSignals      = activeSignals.filter(s => s.signal_type === 'Gap Up + Vol');
+  const lateSurgeSignals  = activeSignals.filter(s => s.signal_type === 'Late Surge');
+  const spikeSignals      = activeSignals.filter(s => s.signal_type === 'Intraday Spike');
+  const moneyFlowSignals  = activeSignals.filter(s => s.signal_type?.includes('Money Flow')).slice(0, 5);
 
   const pageTitle = NAV_ITEMS.find(n => n.id === activeTab)?.label ?? 'Dashboard';
 
@@ -267,10 +268,11 @@ export default function App() {
                 <PullToRefresh onRefresh={forceReconnect}>
                   <div className="flex flex-col gap-6">
                     {([
-                      { key: 'opening', icon: '🌅', label: 'Opening Vol', signals: openingSignals },
-                      { key: 'gapup',   icon: '📈', label: 'Gap Up + Vol', signals: gapUpSignals },
-                      { key: 'spike',   icon: '⚡', label: 'Intraday Spike', signals: spikeSignals },
-                      { key: 'money',   icon: '💸', label: 'Money Flow', signals: moneyFlowSignals },
+                      { key: 'opening',   icon: '🌅', label: 'Opening Vol',    signals: openingSignals },
+                      { key: 'gapup',     icon: '📈', label: 'Gap Up + Vol',  signals: gapUpSignals },
+                      { key: 'latesurge', icon: '🚀', label: 'Late Surge',    signals: lateSurgeSignals },
+                      { key: 'spike',     icon: '⚡', label: 'Intraday Spike', signals: spikeSignals },
+                      { key: 'money',     icon: '💸', label: 'Money Flow',    signals: moneyFlowSignals },
                     ] as const).map(({ key, icon, label, signals }) => (
                       <div key={key}>
                         <div className="mb-3 flex items-center gap-2">
@@ -292,10 +294,11 @@ export default function App() {
                 </PullToRefresh>
               ) : (
                 <div className="grid grid-cols-2 gap-4 items-start">
-                  {/* คอลัมน์ซ้าย: Opening Vol + Gap Up */}
+                  {/* คอลัมน์ซ้าย: Opening Vol + Gap Up + Late Surge */}
                   <div className="flex flex-col gap-4">
                     <StockSignalTable title="Opening Vol" icon="🌅" signals={openingSignals} breakpoint={breakpoint} apiUrl={API_URL} color="amber" />
                     <StockSignalTable title="Gap Up + Vol" icon="📈" signals={gapUpSignals} breakpoint={breakpoint} apiUrl={API_URL} color="emerald" />
+                    <StockSignalTable title="Late Surge" icon="🚀" signals={lateSurgeSignals} breakpoint={breakpoint} apiUrl={API_URL} color="violet" />
                   </div>
                   {/* คอลัมน์ขวา: Intraday Spike + Money Flow */}
                   <div className="flex flex-col gap-4">
