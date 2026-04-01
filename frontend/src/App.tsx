@@ -3,7 +3,6 @@ import { useState, useCallback } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useBreakpoint } from './hooks/useBreakpoint';
 import ConnectionBanner from './components/ConnectionBanner';
-import StatusBar from './components/StatusBar';
 import EmptyDWBanner from './components/EmptyDWBanner';
 import LoadingState from './components/LoadingState';
 import StockSignalTable from './components/StockSignalTable';
